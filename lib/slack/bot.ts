@@ -8,7 +8,7 @@ import { airwallexPayments } from '../airwallex/payments';
 import { config, isAdmin } from '../config';
 import { COPY } from '../copy';
 import { resendProvider } from '../email/resend';
-import { approve, checkPaid, reject, sendReply, setAmount } from '../flow/decisions';
+import { approve, checkPaid, openAmountForm, reject, sendReply, setAmount } from '../flow/decisions';
 import type { ApprovalChat, FlowDeps, ThreadPost } from '../flow/ports';
 import { log, userTag } from '../log';
 import { channelOf } from '../requests/approval';
@@ -191,12 +191,16 @@ export function registerHandlers(): void {
     guarded(event, 'send reply', () => sendReply(decodeCreated(event.value, secret()), clickOf(event), deps())),
   );
   chatBot.onAction(ACTIONS.editAmount, (event) =>
-    guarded(event, 'edit amount', async () => {
-      const pending = decodePending(event.value, secret());
-      if (!pending || !isAdmin(event.user.userId)) return 'ignored';
-      await event.openModal(amountModal({ pending, threadId: event.threadId, messageId: event.messageId }, secret()));
-      return 'modal opened';
-    }),
+    guarded(event, 'edit amount', () =>
+      openAmountForm(
+        decodePending(event.value, secret()),
+        clickOf(event),
+        async (context) => {
+          await event.openModal(amountModal(context, secret()));
+        },
+        deps(),
+      ),
+    ),
   );
   chatBot.onModalSubmit(AMOUNT_MODAL, (event) => {
     // A bad or missing signature is logged inside decodeModalContext; the form just closes.

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { approve, checkPaid, reject, sendReply, setAmount } from '../../lib/flow/decisions';
+import { approve, checkPaid, openAmountForm, reject, sendReply, setAmount } from '../../lib/flow/decisions';
 import { fakeWorld } from '../../lib/flow/fakes';
 import { handleEmail } from '../../lib/flow/inbound';
 import type { CreatedLink } from '../../lib/requests/created';
@@ -169,6 +169,29 @@ describe('no amount stated', () => {
     expect(updated.amount).toBe(1140);
     expect(await approve(updated, clickOn(updated, 0), world.deps)).toBe('created');
     expect(world.payments.links[0].args.amount).toBe(1140);
+  });
+});
+
+describe('who may set the amount', () => {
+  it('opens the amount form only for an admin, on a card of this request', async () => {
+    const { world, pending } = await emailIn('no-amount');
+    const opened: unknown[] = [];
+    const open = async (context: unknown) => {
+      opened.push(context);
+    };
+    expect(await openAmountForm(pending, clickOn(pending, 0, OUTSIDER), open, world.deps)).toBe('ignored');
+    expect(await openAmountForm(null, clickOn(pending, 0), open, world.deps)).toBe('ignored');
+    expect(await openAmountForm(pending, { ...clickOn(pending, 0), messageId: '1799999999.000100' }, open, world.deps)).toBe('ignored');
+    expect(opened).toHaveLength(0);
+    expect(await openAmountForm(pending, clickOn(pending, 0), open, world.deps)).toBe('modal-opened');
+    expect(opened).toEqual([{ pending, threadId: clickOn(pending, 0).threadId, messageId: pending.cards[0].messageId }]);
+  });
+
+  it('ignores an amount submitted by someone who is not an admin', async () => {
+    const { world, pending } = await emailIn('no-amount');
+    expect(await setAmount(pending, clickOn(pending, 0, OUTSIDER), { amount: '50', currency: 'AUD' }, world.deps)).toBe('ignored');
+    expect(world.chat.cards[0].pending.amount).toBeNull();
+    expect(world.chat.threadPosts).toHaveLength(0);
   });
 });
 

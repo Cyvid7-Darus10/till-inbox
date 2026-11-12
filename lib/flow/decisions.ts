@@ -2,6 +2,7 @@ import { COPY } from '../copy';
 import { log } from '../log';
 import { type Action, type Click, channelOf, checkClick, withAmount } from '../requests/approval';
 import type { CreatedLink } from '../requests/created';
+import type { ModalContext } from '../requests/modal-context';
 import { formatAmount, type PendingRequest } from '../requests/pending';
 import { buildReply } from '../requests/reply';
 import { WARNINGS } from '../requests/understand';
@@ -24,7 +25,8 @@ export type DecisionOutcome =
   | 'rejected'
   | 'amount-set'
   | 'amount-refused'
-  | 'over-limit';
+  | 'over-limit'
+  | 'modal-opened';
 
 async function withLock(deps: FlowDeps, key: string, work: () => Promise<DecisionOutcome>): Promise<DecisionOutcome> {
   if (deps.locks.has(key)) return 'busy';
@@ -135,6 +137,19 @@ export async function reject(value: PendingRequest | null, click: Omit<Click, 'a
     log.info('payment request rejected', { requestId: pending.requestId });
     return 'rejected';
   });
+}
+
+/** "Set amount" or "Edit amount": opens the form, for an admin on a card of this request only. */
+export async function openAmountForm(
+  value: PendingRequest | null,
+  click: Omit<Click, 'action'>,
+  open: (context: ModalContext) => Promise<void>,
+  deps: FlowDeps,
+): Promise<DecisionOutcome> {
+  const ok = accepted(deps, value, clickFor('edit-amount', click));
+  if (!ok) return 'ignored';
+  await open({ pending: ok.pending, threadId: click.threadId, messageId: click.messageId });
+  return 'modal-opened';
 }
 
 /** Set or edit the amount: every card is redrawn with the new amount and an Approve button. */
