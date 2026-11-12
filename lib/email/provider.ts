@@ -58,6 +58,8 @@ export interface EmailProvider {
 
 /** Splits `Mia Tran <mia@example.com>` into a name and an address. */
 export function parseAddress(value: string): { address: string; name: string | null } | null {
+  // A real From header is far shorter; refusing long ones keeps the patterns below cheap.
+  if (value.length > MAX_FROM_CHARS) return null;
   const angled = value.match(/^\s*"?([^"<]*?)"?\s*<([^<>\s]+@[^<>\s]+)>\s*$/);
   const bare = value.match(/^\s*([^<>\s]+@[^<>\s]+)\s*$/);
   const address = (angled?.[2] ?? bare?.[1] ?? '').toLowerCase();
@@ -66,12 +68,36 @@ export function parseAddress(value: string): { address: string; name: string | n
   return { address, name: name ? name.slice(0, 120) : null };
 }
 
-/** Rough HTML to text, for emails that have no text part. The result only ever goes to the model. */
+/** Longest From header accepted (an address is at most 254 characters, plus a display name). */
+const MAX_FROM_CHARS = 400;
+/** Most HTML converted. The text is cut to the model's limit afterwards anyway. */
+export const MAX_HTML_CHARS = 200_000;
+
+/** Removes <script> and <style> blocks in one pass; an unclosed one runs to the end. */
+function withoutBlocks(html: string): string {
+  const lower = html.toLowerCase();
+  const open = /<(?:script|style)\b/g;
+  let out = '';
+  let at = 0;
+  for (let match = open.exec(lower); match; match = open.exec(lower)) {
+    const tag = match[0] === '<script' ? '</script>' : '</style>';
+    const close = lower.indexOf(tag, match.index);
+    out += `${html.slice(at, match.index)} `;
+    if (close < 0) return out;
+    at = close + tag.length;
+    open.lastIndex = at;
+  }
+  return out + html.slice(at);
+}
+
+/**
+ * Rough HTML to text, for emails that have no text part. The result only ever goes to the model.
+ * Every pattern here is linear: tags are `<` then anything but `<` or `>`, then `>`.
+ */
 export function htmlToText(html: string): string {
-  return html
-    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+  return withoutBlocks(html.slice(0, MAX_HTML_CHARS))
     .replace(/<br\s*\/?>|<\/p>|<\/div>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/<[^<>]*>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')

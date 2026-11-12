@@ -1,3 +1,4 @@
+import { MAX_EMAIL_TEXT_CHARS } from '../email/guard';
 import { normalizeText } from './clean';
 
 /**
@@ -20,7 +21,18 @@ import { normalizeText } from './clean';
  *    clear. Neither is a token with a currency on both sides.
  * 6. The quote must touch exactly one token in the email, and that token decides the amount and the
  *    currency. A bare "$" names no currency.
+ *
+ * The text is attacker-controlled, so the work is bounded: text longer than MAX_AMOUNT_TEXT_CHARS or
+ * with more than MAX_AMOUNT_TOKENS numbers has no clear amount, and the range check looks only at a
+ * short window on each side of a token, with bounded patterns.
  */
+
+/** Longest email text read for an amount: the same limit the model gets. */
+export const MAX_AMOUNT_TEXT_CHARS = MAX_EMAIL_TEXT_CHARS;
+/** Most numbers an email may contain before nothing in it counts as a clear amount. */
+export const MAX_AMOUNT_TOKENS = 200;
+/** How far either side of a token the range check looks. */
+const WINDOW_CHARS = 40;
 
 /** Symbols that name exactly one currency. "$" alone names none. Longest first, so "US$" is not "S$". */
 const SYMBOLS: [string, string | null][] = [
@@ -82,14 +94,16 @@ function readToken(match: RegExpMatchArray): AmountToken {
 }
 
 // A connecting word next to another number, even one that is not a clean token: a range or a choice.
-const JOINED_AFTER = /^ (?:to|or|and) (?:\S+ )?\S*\d/i;
-const JOINED_BEFORE = /\d\S*(?: \S+)? (?:to|or|and) $/i;
+// Applied to a short window only, with bounded runs, so it cannot backtrack far.
+const JOINED_AFTER = /^ (?:to|or|and) (?:[^ ]{1,20} )?[^ ]{0,20}\d/i;
+const JOINED_BEFORE = /\d[^ ]{0,20}(?: [^ ]{1,20})? (?:to|or|and) $/i;
 
 /** Every amount token in already-normalized text, with ranges and alternatives marked not clear. */
 export function amountsIn(text: string): AmountToken[] {
   return [...text.matchAll(TOKEN)].map(readToken).map((token) => {
-    const joined = JOINED_AFTER.test(text.slice(token.end)) || JOINED_BEFORE.test(text.slice(0, token.start));
-    return joined ? { ...token, value: null } : token;
+    const after = text.slice(token.end, token.end + WINDOW_CHARS);
+    const before = text.slice(Math.max(0, token.start - WINDOW_CHARS), token.start);
+    return JOINED_AFTER.test(after) || JOINED_BEFORE.test(before) ? { ...token, value: null } : token;
   });
 }
 
@@ -112,14 +126,15 @@ function placesOf(quote: string, text: string): { start: number; end: number }[]
 
 /** The one amount token the quote points at in the email, or null if there is not exactly one. */
 export function amountAtQuote(quote: string | null, emailText: string): AmountToken | null {
-  if (!quote || NON_ASCII_DIGIT.test(emailText) || NON_ASCII_DIGIT.test(quote)) return null;
+  if (!quote || emailText.length > MAX_AMOUNT_TEXT_CHARS || NON_ASCII_DIGIT.test(emailText) || NON_ASCII_DIGIT.test(quote)) return null;
   const text = normalizeForAmounts(emailText);
   const wanted = normalizeForAmounts(quote);
   if (!wanted) return null;
   const tokens = amountsIn(text);
+  if (tokens.length > MAX_AMOUNT_TOKENS) return null;
   for (const place of placesOf(wanted, text)) {
     const touched = tokens.filter((token) => token.start < place.end && token.end > place.start);
-    if (touched.length === 1) return touched[0];
+    if (touched.length === 1) return touched[0].value === null ? null : touched[0];
   }
   return null;
 }

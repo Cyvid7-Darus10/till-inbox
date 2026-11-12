@@ -27,9 +27,12 @@ export function normalizeText(value: string): string {
   return value.normalize('NFKC').replace(INVISIBLE, '').replace(LOOKALIKE_DOTS, '.');
 }
 
+/** Most input read by cleanField. Fields are short; the cap keeps the patterns below cheap on any input. */
+const MAX_INPUT_CHARS = 1_000;
+
 export function cleanField(value: string | null | undefined, maxLength: number): string | null {
   if (!value) return null;
-  const cleaned = normalizeText(value)
+  const cleaned = normalizeText(value.slice(0, MAX_INPUT_CHARS))
     .replace(/[\r\n\t]+/g, ' ')
     .replace(SCHEME, ' ')
     .replace(EMAIL, ' ')

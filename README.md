@@ -180,6 +180,12 @@ What the code protects against, in plain words:
   spaces and common punctuation are kept. So no link, mention or Slack formatting gets through.
 - **A wrong amount slipped past the check.** The amount and currency on the card are read from the
   email by code with one strict grammar, as described above, and must agree with the model.
+- **Emails built to stall the parsers.** Every parser of email text has a hard cap and linear-time
+  patterns: the webhook body is capped at 64 KB, HTML at 200,000 characters, the text the model
+  and the amount check read at 8,000, a From header at 400 and each cleaned field at 1,000. An
+  email with more than 200 numbers has no clear amount, and the range check looks only 40
+  characters either side of a number. `tests/pathological-input.test.ts` feeds each parser hostile
+  input and checks it finishes quickly.
 - **Header injection.** The reply's subject is fixed text, the recipient is a validated address,
   and the original Message-ID is used for threading only if it is a single well-formed line.
 - **Personal data in logs.** Logs carry ids, counts and fixed codes. Fields whose names suggest
