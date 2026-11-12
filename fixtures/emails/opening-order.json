@@ -10,15 +10,9 @@
     "text": "Hi Kopi Lane team,\n\nThanks again for the samples. We'd like to go ahead with 25 kg of the Lane House Blend at AUD 38 a kilo for our Surry Hills opening, so AUD 950 in total.\n\nCould you send me a link so I can pay by card today? We'd like it settled before the delivery on Friday.\n\nThanks,\nMia Tran\nHarbour Lane Café Pty Ltd",
     "html": null,
     "authentication": {
-      "spf": {
-        "result": "pass"
-      },
-      "dkim": {
-        "result": "pass"
-      },
-      "dmarc": {
-        "result": "pass"
-      }
+      "spf": "pass",
+      "dkim": "pass",
+      "dmarc": "pass"
     }
   },
   "modelReading": {

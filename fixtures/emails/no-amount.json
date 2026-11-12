@@ -10,15 +10,9 @@
     "text": "Hello,\n\nWe'd like to pay for this month's coffee order, the usual 30 kg of house blend plus the decaf. What's the easiest way to pay? A card link would be great.\n\nCheers,\nLeo Park\nFitzroy Pantry",
     "html": null,
     "authentication": {
-      "spf": {
-        "result": "pass"
-      },
-      "dkim": {
-        "result": "pass"
-      },
-      "dmarc": {
-        "result": "pass"
-      }
+      "spf": "pass",
+      "dkim": "pass",
+      "dmarc": "pass"
     }
   },
   "modelReading": {

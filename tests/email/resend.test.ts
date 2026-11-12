@@ -77,6 +77,23 @@ describe('turning a received email into the DTO', () => {
     expect(email.receivedAt).toBe('2026-11-12T08:30:00.123Z');
   });
 
+  it("reads Resend's documented sender check values, and treats anything else as unknown", () => {
+    const { raw } = loadFixture('opening-order');
+    const checks = (authentication: unknown) => toInboundEmail({ ...raw.email, authentication }).auth;
+    expect(checks({ spf: 'pass', dkim: 'fail', dmarc: 'pass' })).toEqual({ spf: 'pass', dkim: 'fail', dmarc: 'pass' });
+    expect(checks({ spf: 'gray', dkim: 'processing_failed', dmarc: 'unknown' })).toEqual({
+      spf: 'unknown',
+      dkim: 'unknown',
+      dmarc: 'unknown',
+    });
+    // An object with a result field, in case the shape changes, still reads.
+    expect(checks({ spf: { result: 'PASS' }, dkim: {}, dmarc: { result: 'fail' } })).toEqual({
+      spf: 'pass',
+      dkim: 'unknown',
+      dmarc: 'fail',
+    });
+  });
+
   it('refuses an email without a usable From address', () => {
     expect(() => toInboundEmail({ id: 'x', created_at: '2026-11-12T08:30:00Z', from: 'nobody' })).toThrow('From');
   });

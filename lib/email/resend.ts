@@ -29,8 +29,9 @@ const webhookSchema = z.object({
   data: z.object({ email_id: z.string().min(1).max(100).optional() }).passthrough(),
 });
 
-// Resend's documented fields. `authentication` is null on older emails; its exact shape is not
-// pinned down in the docs, so anything unexpected reads as "unknown".
+// Resend's documented fields. `authentication` holds the SPF, DKIM and DMARC results as strings
+// ("pass", "fail", "gray", "processing_failed", "unknown") and is null on older emails. Anything
+// other than pass, fail or none reads as "unknown", so the sender counts as unverified.
 const receivedEmailSchema = z.object({
   id: z.string(),
   created_at: z.string(),
