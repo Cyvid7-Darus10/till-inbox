@@ -72,7 +72,11 @@ export function numbersIn(text: string): number[] {
 /** Whether the email states this currency: its code as a word, or a symbol that means only it. */
 export function currencyStated(currency: string, text: string): boolean {
   if (new RegExp(`\\b${currency}\\b`, 'i').test(text)) return true;
-  return Object.entries(SYMBOLS).some(([symbol, code]) => code === currency && text.includes(symbol));
+  // A symbol counts only when no letter comes right before it: "US$" must not read as "S$".
+  const escapeDollar = (symbol: string) => symbol.replace(/[$]/g, '\\$');
+  return Object.entries(SYMBOLS).some(
+    ([symbol, code]) => code === currency && new RegExp(`(?<![A-Za-z])${escapeDollar(symbol)}`).test(text),
+  );
 }
 
 interface CheckedAmount {
@@ -94,8 +98,9 @@ export function checkAmount(extraction: Extraction, emailText: string, settings:
   return { amount: Math.round(amount * 100) / 100, currency, warnings: [] };
 }
 
-const senderVerified = (email: InboundEmail): boolean =>
-  email.auth.dmarc === 'pass' || (email.auth.spf === 'pass' && email.auth.dkim === 'pass');
+// Only DMARC proves the visible From address: SPF and DKIM can pass for another domain. Without a
+// DMARC result the sender counts as unverified.
+export const senderVerified = (email: Pick<InboundEmail, 'auth'>): boolean => email.auth.dmarc === 'pass';
 
 export function understand(email: InboundEmail, extraction: Extraction, settings: UnderstandSettings): Understood {
   const customer: Customer = {

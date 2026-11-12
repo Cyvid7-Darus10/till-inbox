@@ -23,10 +23,11 @@ const firstName = (name: string | null): string | null => name?.split(' ')[0] ??
 const formatDate = (iso: string): string =>
   new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-export const replySubject = (subject: string): string => {
-  const base = subject.replace(/^\s*(re:\s*)+/i, '').trim();
-  return base ? `Re: ${base}` : 'Your payment link';
-};
+/**
+ * Fixed text and the configured company name only. Nothing from the inbound email reaches the
+ * outbound subject, so an email can't put a link or a header line break there.
+ */
+export const replySubject = (companyName: string): string => `Your payment link from ${companyName}`;
 
 /**
  * The reply text. Without a link yet (on the approval card) it shows a placeholder.
@@ -47,5 +48,5 @@ export function buildReply(pending: PendingRequest, link: { url: string; expires
     'Thanks,',
     settings.companyName,
   ].filter((line, index, all) => line !== '' || all[index - 1] !== '');
-  return { to: pending.customer.email, subject: replySubject(pending.subject), text: lines.join('\n') };
+  return { to: pending.customer.email, subject: replySubject(settings.companyName), text: lines.join('\n') };
 }

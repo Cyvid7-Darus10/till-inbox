@@ -73,9 +73,21 @@ describe('creating a payment link', () => {
     });
   });
 
-  it('flags a non-https link and a different reference', () => {
-    const link = { ...sandboxLink({ reference: 'x' }), url: 'http://pay.example/x' };
-    expect(findMismatches(link, args)).toEqual(['it carries another reference', 'its address is not https']);
+  it('flags a different reference and an address that is not an https Airwallex page', () => {
+    for (const url of ['http://pay.sandbox.airwallex.com/x', 'https://pay.evil.example/x', 'https://airwallex.com.evil.example/x']) {
+      const link = { ...sandboxLink({ reference: 'x' }), url };
+      expect(findMismatches(link, args)).toEqual(['it carries another reference', 'its address is not an https Airwallex page']);
+    }
+  });
+
+  it('refuses to reuse a link that is inactive, or that does not say its amount and currency', async () => {
+    const inactive = fakeCaller({ [TOOL.listLinks]: [{ items: [sandboxLink({ active: false })] }] });
+    expect(await createOrReuse(inactive, args, since)).toMatchObject({ ok: false, problem: expect.stringContaining('no longer active') });
+    const bare = { ...sandboxLink() } as Record<string, unknown>;
+    delete bare.amount;
+    delete bare.currency;
+    const missing = fakeCaller({ [TOOL.listLinks]: [{ items: [bare] }] });
+    expect(await createOrReuse(missing, args, since)).toMatchObject({ ok: false, problem: expect.stringContaining('amount is missing') });
   });
 });
 

@@ -1,5 +1,6 @@
 import type { InboundEmail } from '../email/provider';
 import { log } from '../log';
+import { cleanField, cleanMessageId } from '../requests/clean';
 import { fitsInButton, type PendingRequest, requestIdFor } from '../requests/pending';
 import { understand } from '../requests/understand';
 import type { FlowDeps } from './ports';
@@ -13,18 +14,20 @@ export type InboundOutcome = 'carded' | 'noticed' | 'too-long' | 'not-sent';
 
 export async function handleEmail(email: InboundEmail, deps: FlowDeps): Promise<InboundOutcome> {
   const requestId = requestIdFor(email.id);
+  // The subject is attacker-controlled: cleaned before it is stored in a button or shown in Slack.
+  const subject = cleanField(email.subject, 120) ?? '(no subject)';
   const extraction = await deps.extract(email);
   const understood = understand(email, extraction, { maxAmount: deps.settings.maxAmount });
   if (understood.kind === 'not-payment') {
     log.info('email is not a payment request', { requestId });
-    await deps.chat.postNotice(deps.settings.adminSlackIds, understood.customer, email.subject, understood.note);
+    await deps.chat.postNotice(deps.settings.adminSlackIds, understood.customer, subject, understood.note);
     return 'noticed';
   }
   const draft: PendingRequest = {
     requestId,
     receivedAt: email.receivedAt,
-    messageId: email.messageId && email.messageId.length <= 200 ? email.messageId : null,
-    subject: email.subject.slice(0, 120),
+    messageId: cleanMessageId(email.messageId),
+    subject,
     customer: understood.customer,
     purpose: understood.purpose,
     amount: understood.amount,
@@ -42,7 +45,7 @@ export async function handleEmail(email: InboundEmail, deps: FlowDeps): Promise<
     await deps.chat.postNotice(
       deps.settings.adminSlackIds,
       draft.customer,
-      email.subject,
+      subject,
       'The request was too long to put on an approval card.',
     );
     return 'too-long';

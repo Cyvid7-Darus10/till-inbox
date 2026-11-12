@@ -190,7 +190,7 @@ describe('has it been paid?', () => {
     world.payments.connected.add(ADMIN);
     await approve(pending, clickOn(pending, 0), world.deps);
     const created = createdFrom(world);
-    expect(await checkPaid(created, clickOn(pending, 1, OTHER_ADMIN), world.deps)).toBe('needs-login');
+    expect(await checkPaid(created, clickOn(pending, 0, OTHER_ADMIN), world.deps)).toBe('needs-login');
     expect(await checkPaid(created, clickOn(pending, 0, OUTSIDER), world.deps)).toBe('ignored');
     world.payments.links.length = 0;
     await checkPaid(created, clickOn(pending, 0), world.deps);
@@ -221,7 +221,7 @@ describe('send reply (off by default)', () => {
     expect(world.mailer.sent).toEqual([
       expect.objectContaining({
         to: 'accounts@harbourlanecafe.example',
-        subject: 'Re: Paying for the opening order',
+        subject: 'Your payment link from Kopi Lane Roasters',
         inReplyTo: pending.messageId,
       }),
     ]);
@@ -237,5 +237,75 @@ describe('send reply (off by default)', () => {
     const created = createdFrom(world);
     expect(await sendReply(created, { ...clickOn(pending, 0), messageId: created.link.id }, world.deps)).toBe('failed');
     expect(world.chat.threadPosts.at(-1)?.post).toMatchObject({ text: expect.stringContaining("couldn't send") });
+  });
+});
+
+describe('untrusted fields on the way in', () => {
+  it('stores a cleaned subject and drops a Message-ID that could inject a header', async () => {
+    const { email, reading } = loadFixture('opening-order');
+    const world = fakeWorld({ reading });
+    const hostile = {
+      ...email,
+      subject: 'Pay now at evil．com\r\nBcc: victim@example.com',
+      messageId: '<a@b.example>\r\nBcc: x@y.example',
+    };
+    await handleEmail(hostile, world.deps);
+    const pending = world.chat.cards[0].pending;
+    expect(pending.subject).toBe('Pay now at Bcc:');
+    expect(pending.messageId).toBeNull();
+  });
+});
+
+describe('an unverified sender', () => {
+  it('never gets the reply by email, even with sending turned on', async () => {
+    const { email, reading } = loadFixture('opening-order');
+    const world = fakeWorld({ reading, settings: { sendReplyEmail: true } });
+    await handleEmail({ ...email, auth: { spf: 'pass', dkim: 'pass', dmarc: 'fail' } }, world.deps);
+    const pending = world.chat.cards[0].pending;
+    world.payments.connected.add(ADMIN);
+    expect(await approve(pending, clickOn(pending, 0), world.deps)).toBe('created');
+    const post = world.chat.threadPosts.find((entry) => entry.post.kind === 'created')?.post;
+    expect(post).toMatchObject({ canSendEmail: false });
+    const created = createdFrom(world);
+    world.chat.sentButtons.set(created.link.id, true);
+    expect(await sendReply(created, { ...clickOn(pending, 0), messageId: created.link.id }, world.deps)).toBe('ignored');
+    expect(world.mailer.sent).toHaveLength(0);
+  });
+});
+
+describe('link buttons', () => {
+  it('are ignored outside the DM where the request was approved', async () => {
+    const { world, pending } = await emailIn('opening-order', { sendReplyEmail: true });
+    world.payments.connected.add(ADMIN).add(OTHER_ADMIN);
+    await approve(pending, clickOn(pending, 0), world.deps);
+    const created = createdFrom(world);
+    const elsewhere = { ...clickOn(pending, 1, OTHER_ADMIN), messageId: created.link.id };
+    expect(await checkPaid(created, elsewhere, world.deps)).toBe('ignored');
+    expect(await sendReply(created, elsewhere, world.deps)).toBe('ignored');
+  });
+});
+
+describe('when Slack fails part way', () => {
+  it('puts the cards back if they could not all be closed', async () => {
+    const { world, pending } = await emailIn('opening-order');
+    world.payments.connected.add(ADMIN);
+    world.chat.closeCards = async () => false;
+    await expect(approve(pending, clickOn(pending, 0), world.deps)).rejects.toThrow('close every approval card');
+    expect(await world.chat.allOpen(pending)).toBe(true);
+    expect(world.payments.links).toHaveLength(0);
+  });
+
+  it('reopens the cards if the link could not be shown, and a retry shows the same link', async () => {
+    const { world, pending } = await emailIn('opening-order');
+    world.payments.connected.add(ADMIN);
+    const post = world.chat.postInThread.bind(world.chat);
+    world.chat.postInThread = async () => {
+      throw new Error('slack down');
+    };
+    await expect(approve(pending, clickOn(pending, 0), world.deps)).rejects.toThrow('slack down');
+    expect(await world.chat.allOpen(pending)).toBe(true);
+    world.chat.postInThread = post;
+    expect(await approve(pending, clickOn(pending, 0), world.deps)).toBe('reused');
+    expect(world.payments.createCalls).toBe(1);
   });
 });

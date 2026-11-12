@@ -11,7 +11,7 @@ describe('the reply builder', () => {
   it('writes the reply with the link, amount, expiry and signature', () => {
     const reply = buildReply(pendingFixture(), link, settings);
     expect(reply.to).toBe('accounts@harbourlanecafe.example');
-    expect(reply.subject).toBe('Re: Paying for the opening order');
+    expect(reply.subject).toBe('Your payment link from Kopi Lane Roasters');
     expect(reply.text).toBe(
       [
         'Hi Mia,',
@@ -45,9 +45,13 @@ describe('the reply builder', () => {
     expect(() => buildReply(pendingFixture({ amount: null }), link, settings)).toThrow('no amount');
   });
 
-  it('does not stack Re: prefixes', () => {
-    expect(replySubject('RE: Re: Order')).toBe('Re: Order');
-    expect(replySubject('')).toBe('Your payment link');
+  it('never puts the inbound subject in the outbound subject', () => {
+    for (const subject of ['Pay at https://evil.example', 'Order\r\nBcc: victim@example.com', 'Order at evil．com', 'Order']) {
+      const reply = buildReply(pendingFixture({ subject }), link, settings);
+      expect(reply.subject).toBe('Your payment link from Kopi Lane Roasters');
+      expect(reply.subject).not.toMatch(/evil|Bcc|\r|\n|Order/);
+    }
+    expect(replySubject('Kopi Lane Roasters')).toBe('Your payment link from Kopi Lane Roasters');
   });
 });
 
@@ -79,7 +83,7 @@ describe('payment link arguments', () => {
 
 describe('cleaning fields', () => {
   it('removes links, markup and control characters and caps the length', () => {
-    expect(cleanField('Pay\u0007 <b>here</b> https://evil.example/x now', 100)).toBe('Pay bhere/b now');
+    expect(cleanField('Pay\u0007 <b>here</b> https://evil.example/x now', 100)).toBe('Pay b here /b now');
     expect(cleanField('a'.repeat(50), 10)).toBe('a'.repeat(10));
     expect(cleanField('https://only.example', 10)).toBeNull();
     expect(cleanField(null, 10)).toBeNull();

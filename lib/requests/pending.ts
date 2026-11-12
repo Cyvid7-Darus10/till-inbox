@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { cleanMessageId } from './clean';
 import { MAX_NOTE_LENGTH, MAX_PURPOSE_LENGTH } from './extraction';
 import { WARNINGS } from './understand';
 
@@ -27,7 +28,11 @@ export const pendingSchema = z.object({
   requestId: z.string().regex(REQUEST_ID),
   receivedAt: z.iso.datetime({ offset: true }),
   /** For threading a reply email. */
-  messageId: z.string().max(200).nullable(),
+  messageId: z
+    .string()
+    .max(200)
+    .refine((value) => cleanMessageId(value) === value, 'not a safe Message-ID')
+    .nullable(),
   subject: z.string().max(120),
   customer: z.object({ name: z.string().max(120).nullable(), company: z.string().max(120).nullable(), email: z.email() }),
   purpose: z.string().min(1).max(MAX_PURPOSE_LENGTH),

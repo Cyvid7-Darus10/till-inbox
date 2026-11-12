@@ -39,6 +39,14 @@ describe('structured logs', () => {
     expect(line.error).toEqual({ name: 'Error', message: 'outer', cause: { name: 'Error', message: 'inner' } });
   });
 
+  it('logs only the name of AI SDK errors, whose messages can quote model output, and caps messages', () => {
+    const aiError = Object.assign(new Error('Type validation failed: Value: {"customerName":"Mia Tran"}'), {
+      name: 'AI_TypeValidationError',
+    });
+    expect(JSON.parse(formatLine('error', 'x', { error: aiError })).error).toEqual({ name: 'AI_TypeValidationError' });
+    expect(JSON.parse(formatLine('error', 'x', { error: new Error('y'.repeat(1000)) })).error.message).toHaveLength(300);
+  });
+
   it('sends errors to stderr and the rest to stdout', () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => {});
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -85,6 +93,11 @@ describe('copy', () => {
     );
     expect(COPY.thread.status('PAID', true, '2026-11-19')).toBe('Paid. (checked in Airwallex just now)');
     expect(COPY.thread.status('ODD', false, null)).toBe('Status: ODD. The link is no longer active. (checked in Airwallex just now)');
+  });
+
+  it('says plainly on the card when the sender is not verified', () => {
+    expect(COPY.card.senderCheckValue(false)).toMatch(/^NOT VERIFIED/);
+    expect(COPY.card.senderCheckValue(true)).toBe('Passed DMARC');
   });
 
   it('escapes names in sentences', () => {

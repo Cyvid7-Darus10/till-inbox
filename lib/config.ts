@@ -45,7 +45,12 @@ const schema = z
     /** Off by default: Till Inbox refuses any Airwallex MCP server that is not the sandbox. */
     allowLiveAirwallex: flag,
     /** Signs the reply and appears in the model's instructions. */
-    companyName: z.string().min(1).max(80).default('our team'),
+    companyName: z
+      .string()
+      .min(1)
+      .max(80)
+      .regex(/^[\p{L}\p{M}\p{N} .,'’&()-]+$/u, "only letters, digits, spaces and . , ' & ( ) -")
+      .default('our team'),
     /** Model, through Vercel AI Gateway. */
     model: z.string().min(1).default('openai/gpt-5'),
     modelReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).default('low'),

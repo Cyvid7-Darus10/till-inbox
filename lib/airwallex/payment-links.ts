@@ -29,6 +29,16 @@ export const paymentLinkSchema = z.object({
 
 export type PaymentLink = z.infer<typeof paymentLinkSchema>;
 
+/** Payment pages live on airwallex.com (pay.airwallex.com, pay.sandbox.airwallex.com). */
+export function isAirwallexUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && (parsed.hostname === 'airwallex.com' || parsed.hostname.endsWith('.airwallex.com'));
+  } catch {
+    return false;
+  }
+}
+
 const linkListSchema = z.object({ items: z.array(paymentLinkSchema.passthrough()), has_more: z.boolean().optional() });
 const accountListSchema = z.object({ items: z.array(z.object({ account_id: z.string(), name: z.string().optional() })) });
 
@@ -82,13 +92,13 @@ export async function findByReference(
 /** Lists every way a link differs from what was approved. Empty means it matches. */
 export function findMismatches(link: PaymentLink, args: PaymentLinkArgs): string[] {
   const problems: string[] = [];
-  if (link.currency !== undefined && link.currency !== args.currency)
-    problems.push(`currency is ${link.currency}, approved ${args.currency}`);
-  if (link.amount !== undefined && Math.abs(link.amount - args.amount) > AMOUNT_TOLERANCE) {
-    problems.push(`amount is ${link.amount}, approved ${args.amount}`);
+  if (link.currency !== args.currency) problems.push(`currency is ${link.currency ?? 'missing'}, approved ${args.currency}`);
+  if (link.amount === undefined || Math.abs(link.amount - args.amount) > AMOUNT_TOLERANCE) {
+    problems.push(`amount is ${link.amount ?? 'missing'}, approved ${args.amount}`);
   }
+  if (link.active === false) problems.push('it is no longer active');
   if (link.reference && link.reference !== args.reference) problems.push('it carries another reference');
-  if (!link.url.startsWith('https://')) problems.push('its address is not https');
+  if (!isAirwallexUrl(link.url)) problems.push('its address is not an https Airwallex page');
   return problems;
 }
 

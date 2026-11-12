@@ -148,3 +148,34 @@ describe('other cases', () => {
     expect(currencyStated('SGD', 'pay S$40')).toBe(true);
   });
 });
+
+describe('sender verification', () => {
+  const verdict = (auth: {
+    spf: 'pass' | 'fail' | 'none' | 'unknown';
+    dkim: 'pass' | 'fail' | 'none' | 'unknown';
+    dmarc: 'pass' | 'fail' | 'none' | 'unknown';
+  }) => {
+    const { email, reading } = loadFixture('opening-order');
+    const result = understand({ ...email, auth }, reading, settings);
+    if (result.kind !== 'payment') throw new Error('expected a payment request');
+    return result.warnings.includes(WARNINGS.senderNotVerified) ? 'unverified' : 'verified';
+  };
+
+  it('treats SPF pass and DKIM pass without a DMARC pass as unverified', () => {
+    expect(verdict({ spf: 'pass', dkim: 'pass', dmarc: 'fail' })).toBe('unverified');
+    expect(verdict({ spf: 'pass', dkim: 'pass', dmarc: 'none' })).toBe('unverified');
+    expect(verdict({ spf: 'pass', dkim: 'pass', dmarc: 'unknown' })).toBe('unverified');
+  });
+
+  it('treats a DMARC pass as verified', () => {
+    expect(verdict({ spf: 'pass', dkim: 'pass', dmarc: 'pass' })).toBe('verified');
+  });
+});
+
+describe('currency symbols inside other symbols', () => {
+  it('does not read US$ as S$ or CA$ as A$', () => {
+    expect(currencyStated('SGD', 'pay US$40')).toBe(false);
+    expect(currencyStated('AUD', 'pay CA$40')).toBe(false);
+    expect(currencyStated('USD', 'pay US$40')).toBe(true);
+  });
+});

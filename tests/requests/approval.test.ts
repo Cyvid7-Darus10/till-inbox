@@ -98,4 +98,11 @@ describe('setting the amount', () => {
     expect(parseAmount('1,520.5')).toBe(1520.5);
     expect(parseAmount('12345678')).toBeNull();
   });
+
+  it('refuses a decimal comma instead of reading it 100 times too large', () => {
+    expect(parseAmount('12,50')).toBeNull();
+    expect(parseAmount('950,00')).toBeNull();
+    expect(parseAmount('1,5')).toBeNull();
+    expect(parseAmount('1,520,000')).toBe(1520000);
+  });
 });

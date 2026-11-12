@@ -5,6 +5,7 @@ import { actionsFor } from '../requests/approval';
 import { type CreatedLink, encodeCreated } from '../requests/created';
 import { type CardRef, encodePending, formatAmount, type PendingRequest } from '../requests/pending';
 import { buildReply, type ReplySettings } from '../requests/reply';
+import { WARNINGS } from '../requests/understand';
 import { plainText, safeLink } from './text';
 
 /** Slack action ids. */
@@ -48,6 +49,7 @@ function RequestFields({ pending, settings }: { pending: PendingRequest; setting
   return (
     <Fields>
       <Field label={COPY.card.from} value={plainText(fromLine(pending))} />
+      <Field label={COPY.card.senderCheck} value={COPY.card.senderCheckValue(!pending.warnings.includes(WARNINGS.senderNotVerified))} />
       <Field label={COPY.card.request} value={plainText(pending.purpose)} />
       <Field label={COPY.card.amount} value={amount} />
       <Field label={COPY.card.expiry} value={COPY.card.expiryValue(settings.linkExpiryDays)} />

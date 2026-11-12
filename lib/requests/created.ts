@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isAirwallexUrl } from '../airwallex/payment-links';
 import { cardRefSchema, MAX_BUTTON_VALUE_LENGTH, pendingSchema } from './pending';
 
 /**
@@ -11,7 +12,7 @@ export const createdLinkSchema = z.object({
   pending: pendingSchema.extend({ cards: z.array(cardRefSchema).length(1) }),
   link: z.object({
     id: z.string().min(1).max(64),
-    url: z.string().url().startsWith('https://'),
+    url: z.string().url().refine(isAirwallexUrl, 'not an https Airwallex page'),
     accountId: z.string().regex(/^acct_[\w-]{6,40}$/),
     createdAt: z.string().max(40),
     expiresAt: z.string().max(40),

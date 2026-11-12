@@ -8,9 +8,13 @@ export type LogContext = Record<string, unknown> & { requestId?: string };
 
 const REDACTED_KEYS = /email|address|body|text|html|subject|name|token|secret|password|amount|reply/i;
 
+const MAX_MESSAGE_LENGTH = 300;
+
 function describe(value: unknown): unknown {
-  if (value instanceof Error) return { name: value.name, message: value.message, cause: describe(value.cause) };
-  return value;
+  if (!(value instanceof Error)) return value;
+  // AI SDK errors (names start with AI_) can quote the model's output, which holds email content.
+  if (value.name.startsWith('AI_')) return { name: value.name };
+  return { name: value.name, message: value.message.slice(0, MAX_MESSAGE_LENGTH), cause: describe(value.cause) };
 }
 
 /** Builds one log line. Exported for tests. */

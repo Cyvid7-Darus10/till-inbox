@@ -10,7 +10,7 @@ export const WARNING_TEXT: Record<Warning, string> = {
   'amount-over-limit': 'The amount is above the limit for a link. Set a smaller amount, or create the link in Airwallex yourself.',
   'instructions-in-email':
     'This email contains instructions aimed at an assistant. They were ignored, and the amount must be typed in by hand. Read the email itself before you approve.',
-  'sender-not-verified': 'The sender address did not pass SPF, DKIM or DMARC checks. It may not be who it claims to be.',
+  'sender-not-verified': 'The email did not pass DMARC, so it may not come from the address it shows. Check the sender before you approve.',
   'email-clipped': 'The email was long, so only the start was read.',
   'low-confidence': 'The model was not confident reading this email.',
 };
@@ -27,6 +27,10 @@ export const COPY = {
     expiry: 'Link expires',
     expiryValue: (days: number) => `${days} days after approval`,
     senderCheck: 'Sender check',
+    senderCheckValue: (verified: boolean) =>
+      verified
+        ? 'Passed DMARC'
+        : 'NOT VERIFIED: did not pass DMARC, so the From address may be forged. Till Inbox will not email this sender.',
     note: (note: string) => `Model note: ${plainText(note)}`,
     draftReply: 'Draft reply (nothing is sent until you choose to)',
     approve: 'Approve',

@@ -52,6 +52,12 @@ export class RateLimiter {
     private readonly maxKeys = 10_000,
   ) {}
 
+  /** True when this key has used up its current window. Does not count as a use. */
+  exhausted(key: string, nowMs: number): boolean {
+    const current = this.windows.get(key);
+    return current !== undefined && nowMs - current.start < this.windowMs && current.count >= this.limit;
+  }
+
   allow(key: string, nowMs: number): boolean {
     const current = this.windows.get(key);
     if (!current || nowMs - current.start >= this.windowMs) {

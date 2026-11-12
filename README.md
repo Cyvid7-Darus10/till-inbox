@@ -105,9 +105,9 @@ doesn't email the customer either.
 
 **The email is untrusted input.** It comes from anyone on the internet, so:
 
-- The webhook signature is checked before anything else, timestamps older than five minutes are
-  refused, each delivery and each email is handled once, the body is capped at 64 KB, and inbound
-  emails are rate limited per instance and per sender (`lib/email/`).
+- The webhook signature is checked before the email is fetched or anything else is done
+  (`lib/email/intake.ts`). Old timestamps are refused, each delivery and each email is handled once,
+  and the body is capped at 64 KB.
 - The model gets the email as JSON data, with no tools at all. It can only fill in a fixed schema
   (`lib/requests/extraction.ts`).
 - Code checks the model (`lib/requests/understand.ts`). The amount is kept only if the model quotes
@@ -118,21 +118,58 @@ doesn't email the customer either.
   is...") is flagged, by the model and by a separate check in code, and gets no one-click Approve:
   an admin types the amount in by hand.
 - The reply goes to the email's sender, taken from the provider, never from the model or the body.
-  The reply text is a template filled with cleaned fields: links, markup and control characters are
-  stripped, so an email can't plant a link in our answer.
-- The card shows the sender's SPF, DKIM and DMARC results and warns when they fail.
+  The reply text is a template, and its subject is fixed text with your company name.
 
 **Only admins decide, once.** `TILL_ADMIN_SLACK_IDS` lists who may press anything. Each card's
 buttons carry the request, and every click is validated again: the clicker must be an admin, the
-button must belong to a card posted for this request, and the action must be one that card offers.
-Approve and Reject replace every card with a version without buttons, so the first decision wins
-and later clicks do nothing. Airwallex's create call has no idempotency key, so before creating, the
-app looks for a link that already carries this request's reference and reuses it.
+button must belong to a card posted for this request (or, for the buttons under a link, to the DM
+where it was approved), and the action must be one that card offers. Approve and Reject replace
+every card with a version without buttons, so the first decision wins and later clicks do nothing.
+Airwallex's create call has no idempotency key, so before creating, the app looks for a link that
+already carries this request's reference and reuses it, as long as it is still active and matches.
 
-**No Slack or Airwallex keys.** Vercel Connect verifies Slack's requests and holds each admin's
-Airwallex login. The app asks only for the payment link scopes, calls three tools by name
-(`list_auth_org_accounts`, `create_payment_link`, `list_payment_links`) with values it computed
-itself, and refuses any Airwallex server other than the sandbox unless `TILL_ALLOW_LIVE_AIRWALLEX=true`.
+**No Slack or Airwallex keys.** Vercel Connect forwards Slack's requests to the app, signed with the
+project's Vercel OIDC token, and holds each admin's Airwallex login. The app asks only for the
+payment link scopes, calls three tools by name (`list_auth_org_accounts`, `create_payment_link`,
+`list_payment_links`) with values it computed itself, and refuses any Airwallex server other than
+the sandbox unless `TILL_ALLOW_LIVE_AIRWALLEX=true`.
+
+## Security notes
+
+What the code protects against, in plain words:
+
+- **Forged or replayed webhooks.** No valid signature, no work. Requests that fail the signature
+  check count against the sender's address only, so a flood of them can't use up the limit that
+  real deliveries share, and only verified deliveries count against the global limit.
+- **Spoofed senders.** A sender counts as verified only when the email passed DMARC, because SPF
+  and DKIM can pass for a different domain than the visible From address. Every card shows a
+  "Sender check" line, and an unverified sender reads "NOT VERIFIED". The reply is never emailed to
+  an unverified sender, even with sending turned on; the admin has to check and send it themselves.
+- **Links and markup planted in an email.** Every field taken from an email (name, company, what
+  it is for, the subject, the model's note) is cleaned before it reaches Slack, Airwallex or the
+  reply (`lib/requests/clean.ts`). Text is normalized first (full-width letters, look-alike dots,
+  zero-width and direction characters), then anything that looks like a URL, an email address or a
+  hostname with any top-level domain, punycode included, is removed, and only letters, digits,
+  spaces and common punctuation are kept. So no link, mention or Slack formatting gets through.
+- **Header injection.** The reply's subject is fixed text, the recipient is a validated address,
+  and the original Message-ID is used for threading only if it is a single well-formed line.
+- **Personal data in logs.** Logs carry ids, counts and fixed codes. Fields whose names suggest
+  personal data are redacted, and errors from the AI SDK, which can quote the model's output, are
+  logged by name only.
+- **Wrong or unexpected links.** A link is shown only if Airwallex returned it on an https
+  airwallex.com address with the approved amount and currency.
+
+What stays your responsibility as the deployer:
+
+- Who can change the Vercel project. Anyone who can edit its settings can change the admin list,
+  and anyone who can pull its environment (`vercel env pull`) holds an OIDC token that the Slack
+  route accepts, so they could forge a click as an admin.
+- A shared store and a firewall rule for heavier use: the replay cache, rate limits and click lock
+  are per server instance (see [Limits](#limits)). Add a
+  [Vercel Firewall](https://vercel.com/docs/vercel-firewall) rate limit on `/api/webhooks/email`.
+- Keeping `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` secret, and rotating them if they leak.
+- Reading the card. A wrong amount that the email itself states, or a lookalike company name, still
+  needs a person to notice.
 
 To report a security problem, see [SECURITY.md](SECURITY.md).
 
@@ -289,6 +326,10 @@ does not exist in production.
 - At most five admins, because every card's buttons list every card.
 - Resend documents an `authentication` field for sender checks, but not its exact shape; if it
   changes, the card shows "unknown" for those checks.
+- The amount quote may come from anywhere in the email, including an older message quoted below
+  the new one. The card shows the amount; check it against the latest message.
+- If two admins edit the amount at the same moment, the last one wins.
+- A failed "Send reply" removes the button anyway; copy the reply from the thread instead.
 - The model can be wrong. Read the email and the card before you press Approve.
 
 ## License

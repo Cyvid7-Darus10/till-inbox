@@ -25,6 +25,7 @@ export function describeCard(pending: PendingRequest, settings: { companyName: s
   const amount = pending.amount !== null && pending.currency !== null ? formatAmount(pending.amount, pending.currency) : 'Not stated';
   const lines = [
     `From:     ${[pending.customer.name, pending.customer.company, pending.customer.email].filter(Boolean).join(', ')}`,
+    `Sender:   ${COPY.card.senderCheckValue(!pending.warnings.includes('sender-not-verified'))}`,
     `For:      ${pending.purpose}`,
     `Amount:   ${amount}`,
     ...(pending.dueDate ? [`Pay by:   ${pending.dueDate}`] : []),

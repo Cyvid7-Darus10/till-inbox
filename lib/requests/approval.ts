@@ -62,9 +62,10 @@ export type AmountEdit = { ok: true; pending: PendingRequest } | { ok: false; pr
 
 /** Reads an amount an admin typed: "950", "1,520.50". At most two decimals. */
 export function parseAmount(raw: string): number | null {
-  const compact = raw.replace(/[\s,]/g, '');
-  if (!/^\d{1,7}(\.\d{1,2})?$/.test(compact)) return null;
-  const amount = Number(compact);
+  const trimmed = raw.trim();
+  // A comma only as a thousands separator: "1,520.50" yes, "12,50" (a decimal comma) no.
+  if (!/^(?:\d{1,3}(?:,\d{3}){1,2}|\d{1,7})(?:\.\d{1,2})?$/.test(trimmed)) return null;
+  const amount = Number(trimmed.replace(/,/g, ''));
   return amount > 0 ? amount : null;
 }
 

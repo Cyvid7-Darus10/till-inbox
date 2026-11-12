@@ -1,9 +1,10 @@
 import { COPY } from '../copy';
 import { log } from '../log';
-import { type Action, type Click, checkClick, withAmount } from '../requests/approval';
+import { type Action, type Click, channelOf, checkClick, withAmount } from '../requests/approval';
 import type { CreatedLink } from '../requests/created';
 import { formatAmount, type PendingRequest } from '../requests/pending';
 import { buildReply } from '../requests/reply';
+import { WARNINGS } from '../requests/understand';
 import type { FlowDeps } from './ports';
 
 /**
@@ -43,6 +44,8 @@ function accepted(pending: PendingRequest | null, click: Click): { pending: Pend
   return { pending, card: check.card };
 }
 
+export const senderIsVerified = (pending: PendingRequest): boolean => !pending.warnings.includes(WARNINGS.senderNotVerified);
+
 const clickFor = (action: Action, click: Omit<Click, 'action'>): Click => ({ ...click, action });
 
 /** Approve: close the cards, then create the link with the approver's own Airwallex login. */
@@ -59,7 +62,11 @@ export async function approve(value: PendingRequest | null, click: Omit<Click, '
     }
     const admin = await deps.chat.displayName(click.clicker);
     // Closing first means a second click, here or on another admin's card, finds the request decided.
-    if (!(await deps.chat.closeCards(pending, COPY.outcome.approving(admin)))) throw new Error('failed to close every approval card');
+    if (!(await deps.chat.closeCards(pending, COPY.outcome.approving(admin)))) {
+      // Some cards may still show buttons and others not: put every card back so nobody is stuck.
+      await deps.chat.refreshCards(pending);
+      throw new Error('failed to close every approval card');
+    }
     const result = await deps.payments.create(click.clicker, pending, deps.now()).catch((error: unknown) => {
       log.error('failed to create a payment link', { requestId: pending.requestId, error });
       return { ok: false as const, problem: 'Airwallex did not answer as expected. Try Approve again in a moment.' };
@@ -86,8 +93,16 @@ export async function approve(value: PendingRequest | null, click: Omit<Click, '
     };
     const reply = buildReply(pending, { url: created.link.url, expiresAt: created.link.expiresAt }, deps.settings).text;
     const amount = formatAmount(pending.amount ?? 0, pending.currency ?? '');
-    await deps.chat.postInThread(card, { kind: 'text', text: COPY.thread.created(amount, result.reused) });
-    await deps.chat.postInThread(card, { kind: 'created', created, reply, canSendEmail: deps.settings.sendReplyEmail });
+    // Replies by email only to a sender whose address passed DMARC.
+    const canSendEmail = deps.settings.sendReplyEmail && senderIsVerified(pending);
+    try {
+      await deps.chat.postInThread(card, { kind: 'text', text: COPY.thread.created(amount, result.reused) });
+      await deps.chat.postInThread(card, { kind: 'created', created, reply, canSendEmail });
+    } catch (error: unknown) {
+      // The link exists but nobody saw it: reopen the cards. Approving again finds and shows this link.
+      await deps.chat.refreshCards(pending);
+      throw error;
+    }
     log.info('payment link ready', { requestId: pending.requestId, reused: result.reused });
     return result.reused ? 'reused' : 'created';
   });
@@ -141,12 +156,16 @@ export interface LinkClick {
 }
 
 /** "Has it been paid?": reads the link's status from Airwallex with the clicker's own login. */
+/** A link button is only valid in the DM where its approval card was posted. */
+const linkClickOk = (created: CreatedLink | null, click: LinkClick): created is CreatedLink =>
+  created !== null && click.clickerIsAdmin && channelOf(click.threadId) === created.pending.cards[0].channel;
+
 export async function checkPaid(
   created: CreatedLink | null,
   click: LinkClick,
   deps: FlowDeps,
 ): Promise<'answered' | 'ignored' | 'needs-login'> {
-  if (!created || !click.clickerIsAdmin) {
+  if (!linkClickOk(created, click)) {
     log.warn('ignored a status click', { userId: click.clicker });
     return 'ignored';
   }
@@ -163,7 +182,7 @@ export async function checkPaid(
 
 /** "Send reply", only when TILL_SEND_REPLY_EMAIL is true: emails the reply to the original sender, once. */
 export async function sendReply(created: CreatedLink | null, click: LinkClick, deps: FlowDeps): Promise<'sent' | 'ignored' | 'failed'> {
-  if (!created || !click.clickerIsAdmin || !deps.settings.sendReplyEmail) {
+  if (!linkClickOk(created, click) || !deps.settings.sendReplyEmail || !senderIsVerified(created.pending)) {
     log.warn('ignored a send click', { userId: click.clicker });
     return 'ignored';
   }
