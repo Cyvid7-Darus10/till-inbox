@@ -54,6 +54,7 @@ function RequestFields({ pending, settings }: { pending: PendingRequest; setting
       <Field label={COPY.card.amount} value={amount} />
       <Field label={COPY.card.expiry} value={COPY.card.expiryValue(settings.linkExpiryDays)} />
       {pending.dueDate ? <Field label={COPY.card.due} value={pending.dueDate} /> : null}
+      {pending.mentioned.length > 0 ? <Field label={COPY.card.mentioned} value={plainText(pending.mentioned.join(', '))} /> : null}
     </Fields>
   );
 }

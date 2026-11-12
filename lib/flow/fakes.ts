@@ -28,6 +28,7 @@ export function describeCard(pending: PendingRequest, settings: { companyName: s
     `Sender:   ${COPY.card.senderCheckValue(!pending.warnings.includes('sender-not-verified'))}`,
     `For:      ${pending.purpose}`,
     `Amount:   ${amount}`,
+    ...(pending.mentioned.length > 0 ? [`Amounts mentioned: ${pending.mentioned.join(', ')}`] : []),
     ...(pending.dueDate ? [`Pay by:   ${pending.dueDate}`] : []),
     ...pending.warnings.map((warning) => `Warning:  ${WARNING_TEXT[warning as keyof typeof WARNING_TEXT]}`),
     ...(pending.note ? [`Note:     ${pending.note}`] : []),

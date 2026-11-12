@@ -45,6 +45,8 @@ export const pendingSchema = z.object({
   confidence: z.enum(['high', 'medium', 'low']),
   note: z.string().max(MAX_NOTE_LENGTH),
   warnings: z.array(warningSchema).max(10),
+  /** Amounts the email writes as money, shown on the card as information. */
+  mentioned: z.array(z.string().regex(/^[\w$€£ ,.]{1,24}$/)).max(10),
   /** Every approval card for this request, so the first decision can close the rest. */
   cards: z.array(cardRefSchema).max(MAX_APPROVAL_CARDS),
 });

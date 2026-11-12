@@ -1,0 +1,32 @@
+{
+  "description": "One plain amount: a deli asks for a card link to pay AUD 640.",
+  "email": {
+    "id": "4f1c2b8e-0d1a-4b7e-9c11-6a2f0e9b0004",
+    "created_at": "2026-11-13T01:30:00.000Z",
+    "from": "Noah Lee <accounts@northbeachdeli.example>",
+    "to": ["orders@kopilane.example"],
+    "subject": "Card link for our order",
+    "message_id": "<single-amount-0004@northbeachdeli.example>",
+    "text": "Hi Kopi Lane team,\n\nCould you send me a link so I can pay for this week's Lane House Blend by card? The invoice says AUD 640.\n\nThanks,\nNoah Lee\nNorth Beach Deli",
+    "html": null,
+    "authentication": {
+      "spf": "pass",
+      "dkim": "pass",
+      "dmarc": "pass"
+    }
+  },
+  "modelReading": {
+    "isPaymentRequest": true,
+    "customerName": "Noah Lee",
+    "company": "North Beach Deli",
+    "purpose": "this week's Lane House Blend",
+    "amount": 640,
+    "currency": "AUD",
+    "amountQuote": "The invoice says AUD 640.",
+    "dueDate": null,
+    "confidence": "high",
+    "note": "Sender requests a card payment link and cites the invoice total.",
+    "containsInstructions": false
+  },
+  "modelReadingSource": "Recorded from openai/gpt-5 through Vercel AI Gateway on 2026-11-13 with npm run read-email."
+}

@@ -2,7 +2,7 @@
 // and prints each step. No accounts needed. The model's reading comes from the fixture (recorded
 // from a real run); pass --live-model to call the model through Vercel AI Gateway instead.
 //
-// Usage: npm run simulate -- fixtures/emails/opening-order.json [--live-model] [--amount "1140 AUD"] [--step]
+// Usage: npm run simulate -- fixtures/emails/single-amount.json [--live-model] [--amount "1140 AUD"] [--step]
 // --step waits for Enter before each step and clears the screen, for showing it to people.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';

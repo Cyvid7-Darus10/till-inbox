@@ -4,7 +4,7 @@
 //
 // Needs `vercel env pull .env.local` (OIDC token) and an Airwallex login for the subject, which the
 // script offers to start. Usage:
-//   npm run live-link -- fixtures/emails/opening-order.json [--as <login id>]
+//   npm run live-link -- fixtures/emails/single-amount.json [--as <login id>]
 import { readFile } from 'node:fs/promises';
 import { airwallexPayments } from '../lib/airwallex/payments';
 import { connectUrl, isConnected } from '../lib/airwallex/session';
@@ -24,7 +24,7 @@ const fixture = JSON.parse(await readFile(path, 'utf8'));
 const email = toInboundEmail(fixture.email);
 const understood = understand(email, fixture.modelReading, { maxAmount: config().maxAmount });
 if (understood.kind !== 'payment' || understood.amount === null)
-  throw new Error('this fixture has no amount to approve; use opening-order');
+  throw new Error('this fixture has no amount to approve; use single-amount');
 
 if (!(await isConnected(subject))) {
   console.info(`The login "${subject}" has not connected Airwallex. Open this link, sign in to your SANDBOX, then run again:`);
@@ -46,6 +46,7 @@ const pending: PendingRequest = {
   confidence: understood.confidence,
   note: understood.note,
   warnings: understood.warnings,
+  mentioned: understood.mentioned,
   cards: [{ channel: 'DLIVECHECK', messageId: '1700000000.000100' }],
 };
 const payments = airwallexPayments({

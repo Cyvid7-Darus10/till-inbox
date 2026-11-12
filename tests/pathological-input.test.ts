@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { htmlToText, MAX_HTML_CHARS, parseAddress } from '../lib/email/provider';
 import { toInboundEmail } from '../lib/email/resend';
-import { amountAtQuote, MAX_AMOUNT_TEXT_CHARS, MAX_AMOUNT_TOKENS } from '../lib/requests/amount';
+import { MAX_AMOUNT_TEXT_CHARS, readAmount } from '../lib/requests/amount';
 import { cleanField } from '../lib/requests/clean';
 import { looksLikeInstructions, understand, WARNINGS } from '../lib/requests/understand';
 import { loadFixture } from './fixtures';
@@ -35,19 +35,14 @@ describe('reading an amount from hostile text', () => {
   ];
 
   it.each(cases)('finishes quickly with no amount: %s', (_label, text, quote) => {
-    const { result, ms } = timed(() => amountAtQuote(quote, text));
-    expect(result).toBeNull();
+    const { result, ms } = timed(() => readAmount(quote, text));
+    expect(result.kind).toBe('unclear');
     expect(ms).toBeLessThan(BUDGET_MS);
   });
 
-  it('reads no amount from text longer than the cap, or with too many tokens', () => {
-    expect(amountAtQuote('AUD 950', `${repeat('x', MAX_AMOUNT_TEXT_CHARS)} AUD 950`)).toBeNull();
-    expect(
-      amountAtQuote('AUD 950', `${repeat('Box 7 shipped today. ', MAX_AMOUNT_TOKENS)}Please pay the amount of AUD 950 now.`),
-    ).toBeNull();
-    expect(
-      amountAtQuote('AUD 950', `${repeat('Box 7 shipped today. ', MAX_AMOUNT_TOKENS - 1)}Please pay the amount of AUD 950 now.`),
-    ).toMatchObject({ value: 950 });
+  it('reads no amount from text longer than the cap', () => {
+    expect(readAmount('AUD 950', `${repeat('x', MAX_AMOUNT_TEXT_CHARS)} AUD 950`).kind).toBe('unclear');
+    expect(readAmount('AUD 950', `${repeat('x ', 3_000)}AUD 950`)).toEqual({ kind: 'clear', value: 950, currency: 'AUD' });
   });
 });
 

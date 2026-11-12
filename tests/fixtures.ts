@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { toInboundEmail } from '../lib/email/resend';
 import type { Extraction } from '../lib/requests/extraction';
 
-/** The three fixture emails, with the model readings recorded from a real run. */
-export type FixtureName = 'opening-order' | 'no-amount' | 'injection';
+/** The four fixture emails, with the model readings recorded from a real run. */
+export type FixtureName = 'single-amount' | 'opening-order' | 'no-amount' | 'injection';
 
 export function loadFixture(name: FixtureName) {
   const raw = JSON.parse(readFileSync(new URL(`../fixtures/emails/${name}.json`, import.meta.url), 'utf8'));

@@ -1,13 +1,13 @@
 import type { InboundEmail } from '../email/provider';
-import { amountAtQuote, decimalsOf } from './amount';
+import { type AmountReading, decimalsOf, moneyMentioned, readAmount } from './amount';
 import { cleanField } from './clean';
 import { type Extraction, MAX_NOTE_LENGTH, MAX_PURPOSE_LENGTH } from './extraction';
 
 /**
  * Turns the model's reading of an email into a request a person can approve, and checks the model
- * instead of trusting it. The amount survives only if the email itself states it: the model must
- * quote the words, the quote must appear in the email, and the number must be in the quote.
- * Otherwise the amount is dropped and an admin is asked for it. Pure.
+ * instead of trusting it. The model's quote only points at the amount; lib/requests/amount.ts decides
+ * whether the email states it plainly enough for a one-click Approve. Otherwise the amount is dropped
+ * and an admin types it. Pure.
  */
 
 export const WARNINGS = {
@@ -15,6 +15,8 @@ export const WARNINGS = {
   amountNotInEmail: 'amount-not-in-email',
   currencyNotStated: 'currency-not-stated',
   amountOverLimit: 'amount-over-limit',
+  severalNumbers: 'several-numbers',
+  amountNotPlain: 'amount-not-plain',
   instructionsInEmail: 'instructions-in-email',
   senderNotVerified: 'sender-not-verified',
   emailClipped: 'email-clipped',
@@ -41,6 +43,8 @@ export type Understood =
       confidence: Extraction['confidence'];
       note: string;
       warnings: Warning[];
+      /** Amounts the email writes as money, for the card. Information only. */
+      mentioned: string[];
     }
   | { kind: 'not-payment'; customer: Customer; note: string };
 
@@ -70,23 +74,25 @@ interface CheckedAmount {
 
 const unclear = (warning: Warning): CheckedAmount => ({ amount: null, currency: null, warnings: [warning] });
 
-/**
- * Keeps the amount only if the email itself states it. The model's quote only says where to look:
- * lib/requests/amount.ts reads the one amount token there with a strict grammar, and the amount and
- * currency that go on the card are the ones the email states, and must agree with the model's.
- */
+const UNCLEAR_WARNING: Record<Extract<AmountReading, { kind: 'unclear' }>['reason'], Warning> = {
+  'not-found': WARNINGS.amountNotInEmail,
+  'several-numbers': WARNINGS.severalNumbers,
+  'no-currency': WARNINGS.currencyNotStated,
+  'not-plain': WARNINGS.amountNotPlain,
+};
+
+/** Keeps the amount only if the email states it plainly and it is what the model read. */
 export function checkAmount(extraction: Extraction, emailText: string, settings: UnderstandSettings): CheckedAmount {
   const { amount, currency } = extraction;
   if (amount === null) return unclear(WARNINGS.amountNotStated);
-  const token = amountAtQuote(extraction.amountQuote, emailText);
-  if (!token || token.value === null || token.value <= 0 || Math.abs(token.value - amount) >= AMOUNT_TOLERANCE) {
-    return unclear(WARNINGS.amountNotInEmail);
-  }
-  if (!currency || token.currency !== currency) return unclear(WARNINGS.currencyNotStated);
-  const decimals = (token.value.toString().split('.')[1] ?? '').length;
-  if (decimals > decimalsOf(currency)) return unclear(WARNINGS.amountNotInEmail);
-  if (token.value > settings.maxAmount) return unclear(WARNINGS.amountOverLimit);
-  return { amount: token.value, currency, warnings: [] };
+  const reading = readAmount(extraction.amountQuote, emailText);
+  if (reading.kind === 'unclear') return unclear(UNCLEAR_WARNING[reading.reason]);
+  if (reading.value <= 0 || Math.abs(reading.value - amount) >= AMOUNT_TOLERANCE) return unclear(WARNINGS.amountNotInEmail);
+  if (currency !== reading.currency) return unclear(WARNINGS.currencyNotStated);
+  const decimals = (reading.value.toString().split('.')[1] ?? '').length;
+  if (decimals > decimalsOf(reading.currency)) return unclear(WARNINGS.amountNotInEmail);
+  if (reading.value > settings.maxAmount) return unclear(WARNINGS.amountOverLimit);
+  return { amount: reading.value, currency: reading.currency, warnings: [] };
 }
 
 // Only DMARC proves the visible From address: SPF and DKIM can pass for another domain. Without a
@@ -124,5 +130,6 @@ export function understand(email: InboundEmail, extraction: Extraction, settings
     confidence: extraction.confidence,
     note,
     warnings: [...checked.warnings, ...flags],
+    mentioned: moneyMentioned(email.text),
   };
 }

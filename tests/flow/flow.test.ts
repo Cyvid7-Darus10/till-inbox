@@ -31,17 +31,17 @@ const createdFrom = (world: Awaited<ReturnType<typeof emailIn>>['world']): Creat
 
 describe('email in', () => {
   it('sends one approval card to each admin and creates nothing yet', async () => {
-    const { world, outcome, pending } = await emailIn('opening-order');
+    const { world, outcome, pending } = await emailIn('single-amount');
     expect(outcome).toBe('carded');
     expect(world.chat.cards).toHaveLength(2);
     expect(pending.cards).toHaveLength(2);
-    expect(pending.amount).toBe(950);
+    expect(pending.amount).toBe(640);
     expect(world.payments.links).toHaveLength(0);
     expect(world.mailer.sent).toHaveLength(0);
   });
 
   it('posts a notice, not a card, for an email that is not a payment request', async () => {
-    const { reading, email } = loadFixture('opening-order');
+    const { reading, email } = loadFixture('single-amount');
     const world = fakeWorld({ reading: { ...reading, isPaymentRequest: false } });
     expect(await handleEmail(email, world.deps)).toBe('noticed');
     expect(world.chat.cards).toHaveLength(0);
@@ -51,7 +51,7 @@ describe('email in', () => {
 
 describe('approve', () => {
   it('needs the approver’s own Airwallex login first, and keeps the cards open meanwhile', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     expect(await approve(pending, clickOn(pending, 0), world.deps)).toBe('needs-login');
     expect(world.chat.threadPosts[0].post.kind).toBe('connect');
     expect(await world.chat.allOpen(pending)).toBe(true);
@@ -59,11 +59,11 @@ describe('approve', () => {
   });
 
   it('creates exactly one link, posts the reply in the thread, and sends nothing to the customer', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN);
     expect(await approve(pending, clickOn(pending, 0), world.deps)).toBe('created');
     expect(world.payments.links).toHaveLength(1);
-    expect(world.payments.links[0].args).toMatchObject({ amount: 950, currency: 'AUD', reusable: false, reference: pending.requestId });
+    expect(world.payments.links[0].args).toMatchObject({ amount: 640, currency: 'AUD', reusable: false, reference: pending.requestId });
     const created = createdFrom(world);
     const post = world.chat.threadPosts.find((entry) => entry.post.kind === 'created')?.post;
     expect(post).toMatchObject({ canSendEmail: false });
@@ -73,7 +73,7 @@ describe('approve', () => {
   });
 
   it('ignores a double click, a click on the other admin’s card, and a Slack retry', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN).add(OTHER_ADMIN);
     expect(await approve(pending, clickOn(pending, 0), world.deps)).toBe('created');
     expect(await approve(pending, clickOn(pending, 0), world.deps)).toBe('decided');
@@ -82,7 +82,7 @@ describe('approve', () => {
   });
 
   it('lets only one of two simultaneous clicks in this instance through', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN);
     const results = await Promise.all([
       approve(pending, clickOn(pending, 0), world.deps),
@@ -93,7 +93,7 @@ describe('approve', () => {
   });
 
   it('reuses the existing link if the cards were reopened after a link was already made', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN);
     await approve(pending, clickOn(pending, 0), world.deps);
     await world.chat.refreshCards(pending);
@@ -102,7 +102,7 @@ describe('approve', () => {
   });
 
   it('reopens the cards when Airwallex fails, so an admin can try again', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN);
     world.payments.create = async () => {
       throw new Error('network down');
@@ -112,7 +112,7 @@ describe('approve', () => {
   });
 
   it('ignores someone who is not an admin, and a tampered button', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(OUTSIDER);
     expect(await approve(pending, clickOn(pending, 0, OUTSIDER), world.deps)).toBe('ignored');
     expect(await approve(null, clickOn(pending, 0), world.deps)).toBe('ignored');
@@ -155,7 +155,7 @@ describe('prompt injection', () => {
 
 describe('reject', () => {
   it('closes every card and creates nothing; a later Approve does nothing', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN);
     expect(await reject(pending, clickOn(pending, 1, OTHER_ADMIN), world.deps)).toBe('rejected');
     expect(await approve(pending, clickOn(pending, 0), world.deps)).toBe('decided');
@@ -165,7 +165,7 @@ describe('reject', () => {
   });
 
   it('ignores a reject from someone who is not an admin', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     expect(await reject(pending, clickOn(pending, 0, OUTSIDER), world.deps)).toBe('ignored');
     expect(await world.chat.allOpen(pending)).toBe(true);
   });
@@ -173,7 +173,7 @@ describe('reject', () => {
 
 describe('has it been paid?', () => {
   it('reads the status from Airwallex and answers in the thread', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN);
     await approve(pending, clickOn(pending, 0), world.deps);
     const created = createdFrom(world);
@@ -186,7 +186,7 @@ describe('has it been paid?', () => {
   });
 
   it('asks a newly connected admin to sign in, ignores outsiders, and says when the link is gone', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN);
     await approve(pending, clickOn(pending, 0), world.deps);
     const created = createdFrom(world);
@@ -200,7 +200,7 @@ describe('has it been paid?', () => {
 
 describe('send reply (off by default)', () => {
   it('does nothing while TILL_SEND_REPLY_EMAIL is off', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN);
     await approve(pending, clickOn(pending, 0), world.deps);
     const created = createdFrom(world);
@@ -209,7 +209,7 @@ describe('send reply (off by default)', () => {
   });
 
   it('when turned on, sends once to the original sender after an admin presses it', async () => {
-    const { world, pending } = await emailIn('opening-order', { sendReplyEmail: true });
+    const { world, pending } = await emailIn('single-amount', { sendReplyEmail: true });
     world.payments.connected.add(ADMIN);
     await approve(pending, clickOn(pending, 0), world.deps);
     expect(world.mailer.sent).toHaveLength(0);
@@ -220,7 +220,7 @@ describe('send reply (off by default)', () => {
     expect(await sendReply(created, { ...sendClick, clicker: OUTSIDER, clickerIsAdmin: false }, world.deps)).toBe('ignored');
     expect(world.mailer.sent).toEqual([
       expect.objectContaining({
-        to: 'accounts@harbourlanecafe.example',
+        to: 'accounts@northbeachdeli.example',
         subject: 'Your payment link from Kopi Lane Roasters',
         inReplyTo: pending.messageId,
       }),
@@ -228,7 +228,7 @@ describe('send reply (off by default)', () => {
   });
 
   it('says so in the thread when sending fails', async () => {
-    const { world, pending } = await emailIn('opening-order', { sendReplyEmail: true });
+    const { world, pending } = await emailIn('single-amount', { sendReplyEmail: true });
     world.payments.connected.add(ADMIN);
     await approve(pending, clickOn(pending, 0), world.deps);
     world.mailer.sendEmail = async () => {
@@ -242,7 +242,7 @@ describe('send reply (off by default)', () => {
 
 describe('untrusted fields on the way in', () => {
   it('stores a cleaned subject and drops a Message-ID that could inject a header', async () => {
-    const { email, reading } = loadFixture('opening-order');
+    const { email, reading } = loadFixture('single-amount');
     const world = fakeWorld({ reading });
     const hostile = {
       ...email,
@@ -258,7 +258,7 @@ describe('untrusted fields on the way in', () => {
 
 describe('an unverified sender', () => {
   it('never gets the reply by email, even with sending turned on', async () => {
-    const { email, reading } = loadFixture('opening-order');
+    const { email, reading } = loadFixture('single-amount');
     const world = fakeWorld({ reading, settings: { sendReplyEmail: true } });
     await handleEmail({ ...email, auth: { spf: 'pass', dkim: 'pass', dmarc: 'fail' } }, world.deps);
     const pending = world.chat.cards[0].pending;
@@ -275,7 +275,7 @@ describe('an unverified sender', () => {
 
 describe('link buttons', () => {
   it('are ignored outside the DM where the request was approved', async () => {
-    const { world, pending } = await emailIn('opening-order', { sendReplyEmail: true });
+    const { world, pending } = await emailIn('single-amount', { sendReplyEmail: true });
     world.payments.connected.add(ADMIN).add(OTHER_ADMIN);
     await approve(pending, clickOn(pending, 0), world.deps);
     const created = createdFrom(world);
@@ -287,7 +287,7 @@ describe('link buttons', () => {
 
 describe('when Slack fails part way', () => {
   it('puts the cards back if they could not all be closed', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN);
     world.chat.closeCards = async () => false;
     await expect(approve(pending, clickOn(pending, 0), world.deps)).rejects.toThrow('close every approval card');
@@ -296,7 +296,7 @@ describe('when Slack fails part way', () => {
   });
 
   it('reopens the cards if the link could not be shown, and a retry shows the same link', async () => {
-    const { world, pending } = await emailIn('opening-order');
+    const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(ADMIN);
     const post = world.chat.postInThread.bind(world.chat);
     world.chat.postInThread = async () => {

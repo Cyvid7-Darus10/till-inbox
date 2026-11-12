@@ -7,7 +7,7 @@ const settings = { maxAmount: 10_000 };
 
 describe('the extraction schema', () => {
   it('accepts the readings recorded from the real model', () => {
-    for (const name of ['opening-order', 'no-amount', 'injection'] as const) {
+    for (const name of ['single-amount', 'opening-order', 'no-amount', 'injection'] as const) {
       expect(extractionSchema.safeParse(loadFixture(name).reading).success).toBe(true);
     }
   });
@@ -21,10 +21,21 @@ describe('the extraction schema', () => {
 });
 
 describe('a clear request', () => {
-  it('keeps the amount the email states', () => {
+  it('keeps the amount of an email with a single, plain amount', () => {
+    const { email, reading } = loadFixture('single-amount');
+    const result = understand(email, reading, settings);
+    expect(result).toMatchObject({ kind: 'payment', amount: 640, currency: 'AUD', warnings: [], mentioned: ['AUD 640'] });
+    expect(result.customer).toEqual({ name: 'Noah Lee', company: 'North Beach Deli', email: 'accounts@northbeachdeli.example' });
+  });
+});
+
+describe('an email with several numbers', () => {
+  it('gives the café email no amount, and lists the amounts it mentions', () => {
     const { email, reading } = loadFixture('opening-order');
     const result = understand(email, reading, settings);
-    expect(result).toMatchObject({ kind: 'payment', amount: 950, currency: 'AUD', warnings: [] });
+    expect(result).toMatchObject({ kind: 'payment', amount: null, currency: null, warnings: [WARNINGS.severalNumbers] });
+    if (result.kind !== 'payment') throw new Error('expected a payment request');
+    expect(result.mentioned).toEqual(['AUD 38', 'AUD 950']);
     expect(result.customer).toEqual({ name: 'Mia Tran', company: 'Harbour Lane Café Pty Ltd', email: 'accounts@harbourlanecafe.example' });
   });
 });
@@ -40,19 +51,19 @@ describe('no amount stated', () => {
     const { email, reading } = loadFixture('opening-order');
     const noTotal = { ...email, text: email.text.replace(', so AUD 950 in total', '') };
     const guessed = { ...reading, amountQuote: '25 kg of the Lane House Blend at AUD 38 a kilo' };
-    expect(understand(noTotal, guessed, settings)).toMatchObject({ amount: null, warnings: [WARNINGS.amountNotInEmail] });
+    expect(understand(noTotal, guessed, settings)).toMatchObject({ amount: null, warnings: [WARNINGS.severalNumbers] });
   });
 
   it('drops an amount whose quote is not in the email', () => {
-    const { email, reading } = loadFixture('opening-order');
-    expect(checkAmount({ ...reading, amountQuote: 'AUD 950 due now' }, email.text, settings).warnings).toEqual([WARNINGS.amountNotInEmail]);
+    const { email, reading } = loadFixture('single-amount');
+    expect(checkAmount({ ...reading, amountQuote: 'AUD 640 due now' }, email.text, settings).warnings).toEqual([WARNINGS.amountNotInEmail]);
     expect(checkAmount({ ...reading, amountQuote: null }, email.text, settings).warnings).toEqual([WARNINGS.amountNotInEmail]);
   });
 
   it('drops an amount when the currency is not clear', () => {
-    const { email, reading } = loadFixture('opening-order');
+    const { email, reading } = loadFixture('single-amount');
     const dollars = { ...email, text: 'Please send a link for $950 in total.' };
-    expect(understand(dollars, { ...reading, currency: 'USD', amountQuote: '$950 in total' }, settings)).toMatchObject({
+    expect(understand(dollars, { ...reading, amount: 950, currency: 'USD', amountQuote: '$950 in total' }, settings)).toMatchObject({
       amount: null,
       warnings: [WARNINGS.currencyNotStated],
     });
@@ -60,7 +71,7 @@ describe('no amount stated', () => {
   });
 
   it('drops an amount above the limit', () => {
-    const { email, reading } = loadFixture('opening-order');
+    const { email, reading } = loadFixture('single-amount');
     expect(checkAmount(reading, email.text, { maxAmount: 500 }).warnings).toEqual([WARNINGS.amountOverLimit]);
   });
 });

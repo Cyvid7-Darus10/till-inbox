@@ -14,6 +14,7 @@ export const pendingFixture = (overrides: Partial<PendingRequest> = {}): Pending
   confidence: 'high',
   note: '',
   warnings: [],
+  mentioned: [],
   cards: [
     { channel: 'DADMIN0001', messageId: '1700000001.000100' },
     { channel: 'DADMIN0002', messageId: '1700000002.000100' },

@@ -1,6 +1,6 @@
 // Runs the real model (through Vercel AI Gateway) on one fixture email and prints what it read and
 // what the code kept. Needs `vercel env pull .env.local` for the OIDC token. Sends nothing anywhere.
-// Usage: npm run read-email -- fixtures/emails/opening-order.json
+// Usage: npm run read-email -- fixtures/emails/single-amount.json
 import { readFile } from 'node:fs/promises';
 import { modelExtractor } from '../lib/agent/extract';
 import { toInboundEmail } from '../lib/email/resend';

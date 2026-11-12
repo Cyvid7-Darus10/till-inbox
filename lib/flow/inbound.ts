@@ -36,6 +36,7 @@ export async function handleEmail(email: InboundEmail, deps: FlowDeps): Promise<
     confidence: understood.confidence,
     note: understood.note,
     warnings: understood.warnings,
+    mentioned: understood.mentioned,
     cards: [],
   };
   // Warnings are fixed codes, safe to log; they say why a card asks for an amount.

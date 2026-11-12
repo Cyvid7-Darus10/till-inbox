@@ -7,6 +7,8 @@ export const WARNING_TEXT: Record<Warning, string> = {
   'amount-not-stated': 'The email does not state an amount. Set one before approving.',
   'amount-not-in-email': 'The amount the model read is not written in the email, so it was dropped. Set one before approving.',
   'currency-not-stated': 'The email does not make the currency clear. Set the amount and currency before approving.',
+  'several-numbers': 'The email mentions more than one number, so a person types the amount.',
+  'amount-not-plain': 'The amount reads as a rate, an estimate, or an old or corrected figure, so a person types the amount.',
   'amount-over-limit': 'The amount is above the limit for a link. Set a smaller amount, or create the link in Airwallex yourself.',
   'instructions-in-email':
     'This email contains instructions aimed at an assistant. They were ignored, and the amount must be typed in by hand. Read the email itself before you approve.',
@@ -23,6 +25,7 @@ export const COPY = {
     request: 'For',
     amount: 'Amount',
     amountMissing: 'Not stated',
+    mentioned: 'Amounts mentioned',
     due: 'Pay by',
     expiry: 'Link expires',
     expiryValue: (days: number) => `${days} days after approval`,
