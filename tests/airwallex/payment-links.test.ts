@@ -52,6 +52,20 @@ describe('creating a payment link', () => {
     expect(airwallex.calls[1]).toEqual({ tool: TOOL.createLink, args });
   });
 
+  it('creates nothing when there are more recent links than it can check for a duplicate', async () => {
+    const page = { items: [sandboxLink({ id: 'other', reference: 'someone else' })], has_more: true };
+    const airwallex = fakeCaller({ [TOOL.listLinks]: [page, page, page, page] });
+    const result = await createOrReuse(airwallex, args, since);
+    expect(result).toMatchObject({ ok: false, problem: expect.stringContaining('too many recent payment links') });
+    expect(airwallex.calls.filter((call) => call.tool === TOOL.createLink)).toHaveLength(0);
+  });
+
+  it('still reuses a matching link found before the pages run out', async () => {
+    const other = { items: [sandboxLink({ id: 'other', reference: 'someone else' })], has_more: true };
+    const airwallex = fakeCaller({ [TOOL.listLinks]: [other, { items: [sandboxLink()], has_more: true }] });
+    expect(await createOrReuse(airwallex, args, since)).toMatchObject({ ok: true, reused: true });
+  });
+
   it('reuses a link that already carries the request’s reference, across pages', async () => {
     const airwallex = fakeCaller({
       [TOOL.listLinks]: [

@@ -133,7 +133,8 @@ The main limits are in the [README](../README.md#limits). These are smaller ones
 - The amount quote may come from anywhere in the email, including an older message quoted below the
   new one. The card shows the amount; check it against the latest message.
 - The check for an existing link reads at most 200 links created since shortly before the email
-  arrived.
+  arrived. If Airwallex has more than that, Approve creates nothing and asks the admin to create the
+  link in Airwallex, rather than risk a second link for the same email.
 - The email is read after the webhook answers, and the provider does not retry. If reading it or
   making the card fails, the error is logged and each admin gets a DM saying an email arrived at that
   time and could not be read, with its email id and nothing from the email. If that DM fails too, it

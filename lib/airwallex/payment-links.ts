@@ -67,6 +67,14 @@ export async function chooseAccount(airwallex: AirwallexCaller, configured: stri
   };
 }
 
+/** Thrown when Airwallex still has more links after the last page read. */
+class TooManyLinks extends Error {
+  constructor() {
+    super(`more than ${PAGE_SIZE * MAX_PAGES} recent payment links`);
+    this.name = 'TooManyLinks';
+  }
+}
+
 async function* recentLinks(airwallex: AirwallexCaller, accountId: string, since: Date): AsyncGenerator<PaymentLink> {
   const from = new Date(since.getTime() - LOOKBACK_MS).toISOString().replace(/\.\d{3}Z$/, 'Z');
   for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -76,6 +84,7 @@ async function* recentLinks(airwallex: AirwallexCaller, accountId: string, since
     yield* items;
     if (!has_more) return;
   }
+  throw new TooManyLinks();
 }
 
 /** A link already made for this reference since `since`, if any. */
@@ -107,7 +116,17 @@ export type LinkResult = { ok: true; link: PaymentLink; reused: boolean } | { ok
 /** Creates the approved link, or returns the one already made for this request. */
 /** `since` is when the email arrived: no link for this request can be older. */
 export async function createOrReuse(airwallex: AirwallexCaller, args: PaymentLinkArgs, since: Date): Promise<LinkResult> {
-  const existing = await findByReference(airwallex, args.account_id, args.reference, since);
+  let existing: PaymentLink | null;
+  try {
+    existing = await findByReference(airwallex, args.account_id, args.reference, since);
+  } catch (error: unknown) {
+    // Without reading every recent link, a link already made for this request could be missed.
+    if (!(error instanceof TooManyLinks)) throw error;
+    return {
+      ok: false,
+      problem: `There are too many recent payment links (over ${PAGE_SIZE * MAX_PAGES}) to check this request has none yet. Create it in Airwallex yourself.`,
+    };
+  }
   const link = existing ?? paymentLinkSchema.parse(await airwallex.call(TOOL.createLink, { ...args }));
   const problems = findMismatches(link, args);
   if (problems.length > 0) {
@@ -129,8 +148,13 @@ export async function linkStatus(
   linkId: string,
   createdAt: string,
 ): Promise<LinkStatus | null> {
-  for await (const link of recentLinks(airwallex, accountId, new Date(toIso(createdAt)))) {
-    if (link.id === linkId) return { status: link.status, active: link.active ?? null, expiresAt: link.expires_at ?? null };
+  try {
+    for await (const link of recentLinks(airwallex, accountId, new Date(toIso(createdAt)))) {
+      if (link.id === linkId) return { status: link.status, active: link.active ?? null, expiresAt: link.expires_at ?? null };
+    }
+  } catch (error: unknown) {
+    // Not found within the pages read: the same answer as a link Airwallex no longer lists.
+    if (!(error instanceof TooManyLinks)) throw error;
   }
   return null;
 }
