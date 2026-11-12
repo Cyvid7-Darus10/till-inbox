@@ -21,10 +21,9 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 - An email changing the amount, the recipient of the reply, or what gets created. The model has no
   tools, the reply goes to the sender of the email, the reply text is written by code, and an email
   that tries to instruct an assistant gets no one-click Approve.
-- An amount the email never stated. The model's quote only says where to look; code reads the
-  amount and currency from the email at that place with one strict grammar, and anything it does
-  not read cleanly (negatives, ranges, ids, other number formats, digits from other scripts) goes to
-  an admin to type in.
+- A one-click Approve for an amount the email does not state plainly. The model only points;
+  code reads the amount, and offers one-click Approve only when the email has a single, plain
+  amount with its currency. Any other email goes to an admin to type the amount.
 - Anyone who is not a listed admin approving, rejecting, setting an amount, checking a status or
   sending a reply.
 - A button being reused on another message, or an Approve smuggled onto a card with no amount.

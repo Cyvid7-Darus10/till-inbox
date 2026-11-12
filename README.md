@@ -12,9 +12,9 @@ sends it.
 > end to end with a real inbox and a real Slack workspace. Read the full [Disclaimer](#disclaimer)
 > before you use it with real customers or a live Airwallex account.
 
-![A terminal runs npm run simulate on a sample email. The signed webhook is checked, the model's reading is checked, an approval card goes to two admins, a click from someone who is not an admin is ignored, Approve creates one payment link and a reply, and an email with injected instructions gets no one-click Approve.](docs/demo.gif)
+![A terminal runs npm run simulate on two sample emails. In the first, with one plain amount (AUD 640), the signed webhook and the model's reading are checked, an approval card goes to two admins, a click from someone who is not an admin is ignored, and Approve creates one payment link and a reply. In the second, a café email with a unit price and a total, the card has no Approve button and lists the amounts mentioned, and an admin types AUD 950.](docs/demo.gif)
 
-A simulated run on a sample email, using stand-ins for Slack and Airwallex. Recorded 13 November
+A simulated run on two sample emails, using stand-ins for Slack and Airwallex. Recorded 13 November
 2026. A recording of a real run will replace this after the first end-to-end run.
 [Watch it as a video](docs/demo.mp4).
 
@@ -26,27 +26,31 @@ exception: it needs an API key and a webhook secret.
 
 ```
 DM: Alex and Till Inbox
-  Till Inbox  [Payment link for Harbour Lane Café Pty Ltd]
-              From: Mia Tran, Harbour Lane Café Pty Ltd, accounts@harbourlanecafe.example
+  Till Inbox  [Payment link for North Beach Deli]
+              From: Noah Lee, North Beach Deli, accounts@northbeachdeli.example
               Sender check: Passed DMARC
-              For: 25 kg of the Lane House Blend · Amount: AUD 950.00 · Link expires: 7 days after approval
+              For: this week's Lane House Blend · Amount: AUD 640.00 · Amounts mentioned: AUD 640
               Draft reply (nothing is sent until you choose to)
-              > Hi Mia, ... You can pay AUD 950.00 for 25 kg of the Lane House Blend here: [payment link]
+              > Hi Noah, ... You can pay AUD 640.00 for this week's Lane House Blend here: [payment link]
               (Approve) (Edit amount) (Reject)
   Alex        presses Approve
   Till Inbox  Approved by Alex. Creating the payment link.
-     thread   Created a single-use payment link for AUD 950.00.
+     thread   Created a single-use payment link for AUD 640.00.
               Reply to send to the customer. Copy it into your email. Nothing was sent.
-              > Hi Mia, ... https://pay.sandbox.airwallex.com/...
+              > Hi Noah, ... https://pay.sandbox.airwallex.com/...
               (Open payment link) (Has it been paid?)
+
+An email with more than one number ("25 kg at AUD 38 a kilo, AUD 950 in total") gets a card with
+no Approve button: Amount: Not stated · Amounts mentioned: AUD 38, AUD 950 · (Set amount) (Reject).
 ```
 
 > **What is real (checked 2026-11-12, re-checked 2026-11-13)**
 >
 > Run for real on 12 November:
-> - The model step: `openai/gpt-5` through Vercel AI Gateway read the three example emails in
->   `fixtures/emails/`. It read AUD 950 from the clear one, no amount from the one without, and
->   flagged the injection attempt (`npm run read-email`). Those readings are saved in the fixtures.
+> - The model step: `openai/gpt-5` through Vercel AI Gateway read the example emails in
+>   `fixtures/emails/` (`npm run read-email`): AUD 950 from the café email, no amount from the one
+>   without, and it flagged the injection attempt. On 13 November it read AUD 640 from the
+>   single-amount email. Those readings are saved in the fixtures.
 > - The Airwallex step: the app's own approval code created one payment link in an Airwallex
 >   sandbox through Vercel Connect, with a per-login grant and no API key. Calling it again for the
 >   same request returned the same link instead of a second one, and the status read back as unpaid
@@ -63,10 +67,10 @@ DM: Alex and Till Inbox
 >   lists what that takes. The demo above is that simulation.
 >
 > Re-checked on 13 November: the tests, type check and lint pass, `npm run simulate` gives the
-> results above on all three emails, and the preview's logs show the unsigned, bad-signature and
+> results described here on all four emails, and the preview's logs show the unsigned, bad-signature and
 > signed `email.received` results (an ignored event leaves no log line). The model and sandbox runs
-> were not repeated. The amount check was made stricter on 13 November (see "The email
-> is untrusted input" below), after those runs.
+> were not repeated. The amount check was made much stricter on 13 November, after those runs:
+> the café email's AUD 950 is no longer one-click (see "The email is untrusted input").
 
 ## Try it without any accounts
 
@@ -75,7 +79,8 @@ provider, and prints each step:
 
 ```bash
 npm install
-npm run simulate -- fixtures/emails/opening-order.json   # a café asks to pay AUD 950
+npm run simulate -- fixtures/emails/single-amount.json   # one plain amount: one-click Approve
+npm run simulate -- fixtures/emails/opening-order.json   # several numbers: an admin types the amount
 npm run simulate -- fixtures/emails/no-amount.json       # no amount: an admin has to set one
 npm run simulate -- fixtures/emails/injection.json       # the email tries to rewrite the amount and the recipient
 ```
@@ -98,12 +103,12 @@ An admin can also ask "Has it been paid?" under a link, and send the reply when 
 
 ```mermaid
 sequenceDiagram
-    actor Mia as Customer
+    actor Noah as Customer
     participant Mail as Resend
     participant App as Till Inbox
     actor Alex as Admin
     participant AWX as Airwallex
-    Mia->>Mail: email: how do I pay AUD 950?
+    Noah->>Mail: email: how do I pay AUD 640?
     Mail->>App: signed webhook (metadata only)
     App->>Mail: fetch the email (API key)
     App->>App: model reads it, code checks it
@@ -111,7 +116,7 @@ sequenceDiagram
     Alex->>App: Approve
     App->>AWX: create payment link (Alex's own login)
     App->>Alex: thread: link and reply to send
-    Alex->>Mia: sends the reply (or presses Send reply, if turned on)
+    Alex->>Noah: sends the reply (or presses Send reply, if turned on)
 ```
 
 **Nothing is created before approval.** An email only ever produces an approval card. The link is
@@ -130,11 +135,10 @@ doesn't email the customer either.
   and the body is capped at 64 KB.
 - The model gets the email as JSON data, with no tools at all. It can only fill in a fixed schema
   (`lib/requests/extraction.ts`).
-- The model's reading is only a pointer: code reads the amount and currency from the email itself
-  with one strict grammar (`lib/requests/amount.ts`), and offers one-click Approve only when that
-  amount is the only one in the email, or is clearly marked as the total, is the largest, matches
-  any quantity times unit price, and has no other number within four words of it. When in doubt,
-  the card has no Approve button, only "Set amount" and "Reject", and an admin types the amount.
+- The model only points at the amount; code reads it from the email (`lib/requests/amount.ts`),
+  and one-click Approve exists only for an email with a single, plain amount in a stated currency.
+  Otherwise a person types it: the card lists the amounts the email mentions, has no Approve
+  button, only "Set amount" and "Reject", and typing the amount is the confirmation.
 - An email that tries to instruct an assistant ("ignore previous instructions", "the correct amount
   is...") is flagged, by the model and by a separate check in code, and gets no one-click Approve:
   an admin types the amount in by hand.
@@ -172,8 +176,9 @@ What the code protects against, in plain words:
   zero-width and direction characters), then anything that looks like a URL, an email address or a
   hostname with any top-level domain, punycode included, is removed, and only letters, digits,
   spaces and common punctuation are kept. So no link, mention or Slack formatting gets through.
-- **A wrong amount slipped past the check.** The amount and currency on the card are read from the
-  email by code with one strict grammar, as described above, and must agree with the model.
+- **A wrong amount slipped past the check.** The model only points; code reads the amount, and
+  one-click Approve exists only for an email with a single, plain amount. Every other email, such as
+  one with a unit price and a total, a range, a correction or an estimate, is typed by a person.
 - **Emails built to stall the parsers.** Every parser of email text has a hard cap and linear-time
   patterns: the webhook body is capped at 64 KB, HTML at 200,000 characters, the text the model
   and the amount check read at 8,000, a From header at 400 and each cleaned field at 1,000. Every
@@ -256,7 +261,7 @@ lib/copy.ts       Every sentence the app says
 lib/log.ts        One JSON line per log entry, with personal data redacted
 
 scripts/          simulate.ts, read-email.ts and live-link.ts (see Develop)
-fixtures/emails/  The three example emails, with the model readings recorded from a real run
+fixtures/emails/  The four example emails, with the model readings recorded from real runs
 docs/             The demo recording
 ```
 
@@ -312,10 +317,11 @@ What was not yet run for real, and how to finish it:
 3. Set `TILL_ADMIN_SLACK_IDS`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` and, for a sandbox with
    several accounts, `TILL_AIRWALLEX_ACCOUNT_ID`, then deploy to production (the Airwallex sign-in
    returns to the production URL, which must be public).
-4. Email the receiving address the text of `fixtures/emails/opening-order.json`.
+4. Email the receiving address the text of `fixtures/emails/single-amount.json`.
 5. In Slack: check the card, press Approve, connect the sandbox, press Approve again, and check that
    one link appears in Airwallex under Payments > Payment links. Press "Has it been paid?".
-6. Try `fixtures/emails/no-amount.json` with "Set amount", which also exercises the Slack form.
+6. Try `fixtures/emails/opening-order.json` (several numbers) and `fixtures/emails/no-amount.json`
+   with "Set amount", which also exercises the Slack form.
 
 ## Develop
 
@@ -331,7 +337,7 @@ npm run dev
 | `npm run check`                                           | Type check, lint, and tests with coverage                                                                       |
 | `npm run simulate -- <fixture>`                           | The whole flow with stand-ins, printed step by step. Add `--step` to pause between steps                        |
 | `npm run read-email -- <fixture>`                         | The real model on one fixture email. Sends nothing                                                              |
-| `npm run live-link -- fixtures/emails/opening-order.json` | Creates one real payment link in your Airwallex sandbox, asks again to check it is reused, and reads its status |
+| `npm run live-link -- fixtures/emails/single-amount.json` | Creates one real payment link in your Airwallex sandbox, asks again to check it is reused, and reads its status |
 
 Vercel Connect saves Airwallex logins per environment, so a login made from your laptop (development)
 does not exist in production.
@@ -364,9 +370,10 @@ does not exist in production.
 - The email is read after the webhook answers. If that fails, the error is logged and the provider
   does not retry.
 - Only the first 8,000 characters of an email are read, and the card says when it was cut.
-- The amount check refuses rather than guesses, so many honest emails will need an admin to type
-  the amount: several amounts without a clear total, a total with another number close by, other
-  number formats (1.250,00), amounts written as words, or a quote the model copied with a mistake.
+- One-click Approve is deliberately narrow: only an email with exactly one number that could be an
+  amount (dates, times and international phone numbers aside), written plainly with its currency.
+  Most real emails with line items, unit prices or several figures will need an admin to type the
+  amount. Remaining edge cases are not chased in code: anything unclear is typed by a person.
 - One link per email. A reply in the same thread is a new email and a new card.
 - At most five admins, because every card's buttons list every card.
 - Resend's sender check results other than pass, fail and none (for example "gray") count as not
