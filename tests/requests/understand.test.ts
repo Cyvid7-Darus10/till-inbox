@@ -65,6 +65,57 @@ describe('no amount stated', () => {
   });
 });
 
+describe('a quote that cuts a number short', () => {
+  const { reading } = loadFixture('opening-order');
+  const read = (text: string, amount: number, amountQuote: string, currency = 'AUD') =>
+    checkAmount({ ...reading, amount, currency, amountQuote }, text, settings);
+
+  it('does not read AUD 950 out of AUD 950.75, AUD 9500 or AUD 1,950', () => {
+    expect(read('Please send a link for AUD 950.75 in total.', 950, 'AUD 950').amount).toBeNull();
+    expect(read('Please send a link for AUD 9500 in total.', 950, 'AUD 950').amount).toBeNull();
+    expect(read('The total is AUD 1,950 for the lot.', 1, 'AUD 1').amount).toBeNull();
+    expect(read('The total is AUD 1,950 for the lot.', 950, '950 for the lot').amount).toBeNull();
+  });
+
+  it('still reads a quote that ends where the number ends', () => {
+    expect(read('So AUD 950. Thanks!', 950, 'AUD 950')).toMatchObject({ amount: 950, currency: 'AUD' });
+    expect(read('That is AUD 950.75, thanks.', 950.75, 'AUD 950.75')).toMatchObject({ amount: 950.75 });
+    expect(read('Total AUD 950 and AUD 950.75 later.', 950, 'AUD 950')).toMatchObject({ amount: 950 });
+  });
+
+  it('does not read a negative number as the amount', () => {
+    expect(read('Please refund AUD -950 to us.', 950, 'AUD -950').amount).toBeNull();
+    expect(read('Please refund AUD −950 to us.', 950, 'AUD −950').amount).toBeNull();
+  });
+
+  it('drops an amount that rounds to zero', () => {
+    expect(read('A test charge of AUD 0.004 please.', 0.004, 'AUD 0.004').amount).toBeNull();
+  });
+});
+
+describe('the currency of the quote', () => {
+  const { reading } = loadFixture('opening-order');
+  const read = (text: string, currency: string, amountQuote: string) =>
+    checkAmount({ ...reading, amount: 950, currency, amountQuote }, text, settings);
+
+  it('must be the one the quote names, not another one elsewhere in the email', () => {
+    const text = 'The total is AUD 950. We normally pay you in EUR.';
+    expect(read(text, 'EUR', 'AUD 950')).toMatchObject({ amount: null, warnings: [WARNINGS.currencyNotStated] });
+    expect(read(text, 'AUD', 'AUD 950')).toMatchObject({ amount: 950, currency: 'AUD' });
+  });
+
+  it('must be the only currency the email names when the quote names none', () => {
+    expect(read('We pay 950 in total, in AUD.', 'AUD', '950 in total')).toMatchObject({ amount: 950 });
+    expect(read('We pay 950 in total. Our bank is in EUR, your invoice was in AUD.', 'EUR', '950 in total').amount).toBeNull();
+  });
+
+  it('is not read from ordinary words that look like codes', () => {
+    expect(currencyStated('ALL', 'we all pay 950')).toBe(false);
+    expect(currencyStated('TRY', 'please try 950')).toBe(false);
+    expect(currencyStated('AUD', 'AUD 950')).toBe(true);
+  });
+});
+
 describe('prompt injection', () => {
   it('gives an email with injected instructions no amount, so there is no one-click Approve', () => {
     const { email, reading } = loadFixture('injection');

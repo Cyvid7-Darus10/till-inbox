@@ -1,5 +1,5 @@
 import type { InboundEmail } from '../email/provider';
-import { cleanField, normalizeForMatch } from './clean';
+import { cleanField, normalizeForMatch, normalizeText } from './clean';
 import { type Extraction, MAX_NOTE_LENGTH, MAX_PURPOSE_LENGTH } from './extraction';
 
 /**
@@ -62,21 +62,61 @@ const SYMBOLS: Record<string, string> = { A$: 'AUD', AU$: 'AUD', S$: 'SGD', US$:
 
 const AMOUNT_TOLERANCE = 0.005;
 
+/** ISO 4217 codes the runtime knows. A three-letter word counts as a currency only if it is one. */
+const ISO_CODES: ReadonlySet<string> = new Set(Intl.supportedValuesOf('currency'));
+
+// A number, with a sign only when the minus stands apart ("AUD -950", not the "-11" in "2026-11").
+const NUMBER = /(?:(?<!\w)([-−])\s?)?(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)/g;
+const DIGIT_BEFORE = /\d[.,]?$/;
+const DIGIT_AFTER = /^[.,]?\d/;
+
 export const looksLikeInstructions = (text: string): boolean => INSTRUCTION_PATTERNS.some((pattern) => pattern.test(text));
 
-/** Every number written in a piece of text: "1,520.00" is 1520, "950" is 950. */
+/** Every number written in a piece of text: "1,520.00" is 1520, "950" is 950, "-950" is -950. */
 export function numbersIn(text: string): number[] {
-  return [...text.matchAll(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g)].map((match) => Number(match[0].replace(/,/g, '')));
+  return [...text.matchAll(NUMBER)].map((match) => (match[1] ? -1 : 1) * Number(match[2].replace(/,/g, '')));
 }
 
-/** Whether the email states this currency: its code as a word, or a symbol that means only it. */
-export function currencyStated(currency: string, text: string): boolean {
-  if (new RegExp(`\\b${currency}\\b`, 'i').test(text)) return true;
-  // A symbol counts only when no letter comes right before it: "US$" must not read as "S$".
+/**
+ * Every currency a piece of text names: an ISO code written in capitals ("AUD", not the word "all"),
+ * or a symbol that means only one currency. A symbol counts only when no letter comes right before
+ * it, so "US$" does not read as "S$".
+ */
+export function currenciesIn(text: string): string[] {
+  const codes = [...text.matchAll(/(?<![A-Za-z])[A-Z]{3}(?![A-Za-z])/g)].map((match) => match[0]).filter((code) => ISO_CODES.has(code));
   const escapeDollar = (symbol: string) => symbol.replace(/[$]/g, '\\$');
-  return Object.entries(SYMBOLS).some(
-    ([symbol, code]) => code === currency && new RegExp(`(?<![A-Za-z])${escapeDollar(symbol)}`).test(text),
-  );
+  const symbols = Object.entries(SYMBOLS)
+    .filter(([symbol]) => new RegExp(`(?<![A-Za-z])${escapeDollar(symbol)}`).test(text))
+    .map(([, code]) => code);
+  return [...new Set([...codes, ...symbols])];
+}
+
+/** Whether the text states this currency. */
+export const currencyStated = (currency: string, text: string): boolean => currenciesIn(text).includes(currency);
+
+/**
+ * Whether the quote appears in the text without cutting a number short: "AUD 950" is not a quote of
+ * "AUD 950.75", "AUD 9500" or "AUD 1,950". Both are already normalized.
+ */
+function quotedWhole(quote: string, text: string): boolean {
+  for (let at = text.indexOf(quote); at >= 0; at = text.indexOf(quote, at + 1)) {
+    const before = text.slice(Math.max(0, at - 2), at);
+    const after = text.slice(at + quote.length, at + quote.length + 2);
+    const cutsStart = /^\d/.test(quote) && DIGIT_BEFORE.test(before);
+    const cutsEnd = /\d$/.test(quote) && DIGIT_AFTER.test(after);
+    if (!cutsStart && !cutsEnd) return true;
+  }
+  return false;
+}
+
+/**
+ * The currency of the total: the one the quote names, or, if the quote names none, the only one the
+ * whole email names. Null when that is not exactly one currency.
+ */
+function currencyOfTotal(quote: string, emailText: string): string | null {
+  const inQuote = currenciesIn(quote);
+  const named = inQuote.length > 0 ? inQuote : currenciesIn(emailText);
+  return named.length === 1 ? named[0] : null;
 }
 
 interface CheckedAmount {
@@ -89,13 +129,16 @@ interface CheckedAmount {
 export function checkAmount(extraction: Extraction, emailText: string, settings: UnderstandSettings): CheckedAmount {
   const { amount, currency, amountQuote } = extraction;
   if (amount === null) return { amount: null, currency: null, warnings: [WARNINGS.amountNotStated] };
+  // Matching is case-insensitive; the currency check below reads the quote as written.
   const quote = amountQuote ? normalizeForMatch(amountQuote) : '';
-  const quoted = quote.length > 0 && normalizeForMatch(emailText).includes(quote);
+  const quoted = quote.length > 0 && quotedWhole(quote, normalizeForMatch(emailText));
   const inQuote = numbersIn(quote).some((number) => Math.abs(number - amount) < AMOUNT_TOLERANCE);
-  if (!quoted || !inQuote) return { amount: null, currency: null, warnings: [WARNINGS.amountNotInEmail] };
-  if (!currency || !currencyStated(currency, emailText)) return { amount: null, currency: null, warnings: [WARNINGS.currencyNotStated] };
+  const rounded = Math.round(amount * 100) / 100;
+  if (!quoted || !inQuote || rounded <= 0) return { amount: null, currency: null, warnings: [WARNINGS.amountNotInEmail] };
+  const stated = currencyOfTotal(normalizeText(amountQuote ?? ''), normalizeText(emailText));
+  if (!currency || stated !== currency) return { amount: null, currency: null, warnings: [WARNINGS.currencyNotStated] };
   if (amount > settings.maxAmount) return { amount: null, currency: null, warnings: [WARNINGS.amountOverLimit] };
-  return { amount: Math.round(amount * 100) / 100, currency, warnings: [] };
+  return { amount: rounded, currency, warnings: [] };
 }
 
 // Only DMARC proves the visible From address: SPF and DKIM can pass for another domain. Without a
