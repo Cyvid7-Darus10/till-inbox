@@ -153,11 +153,11 @@ vercel env pull .env.local   # the OIDC token for Vercel Connect and AI Gateway,
 npm run dev
 ```
 
-| Command                           | What it does                                                                         |
-| --------------------------------- | ------------------------------------------------------------------------------------ |
-| `npm run check`                   | Type check, lint, and tests with coverage                                            |
-| `npm run read-email -- <fixture>` | The real model on one fixture email. Sends nothing                                   |
-| `npm run live-link -- <fixture>`  | Creates one real sandbox payment link, checks it is reused, and reads its status     |
+| Command                           | What it does                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------- |
+| `npm run check`                   | Type check, lint, and tests with coverage                                        |
+| `npm run read-email -- <fixture>` | The real model on one fixture email. Sends nothing                               |
+| `npm run live-link -- <fixture>`  | Creates one real sandbox payment link, checks it is reused, and reads its status |
 
 Vercel Connect saves Airwallex logins per environment, so a login made from your laptop (development)
 does not exist in production. A map of the code, and how to swap the email provider or chat tool, is
