@@ -19,7 +19,7 @@ const SCHEME = /\b[a-z][a-z0-9+.-]{1,20}:(?=\S)\S*/gi;
 const EMAIL = /\S+@\S+/g;
 const LABEL = '[\\p{L}\\p{N}](?:[\\p{L}\\p{N}-]{0,61}[\\p{L}\\p{N}])?';
 // label(.label)+ ending in a TLD of letters (any script) or a punycode TLD, plus any path after it.
-const HOSTNAME = new RegExp(`(?<![\\p{L}\\p{N}-])(?:${LABEL}\\.)+(?:\\p{L}{2,63}|xn--[a-z0-9-]{1,59})(?![\\p{L}\\p{N}-])\\S*`, 'giu');
+const HOSTNAME = new RegExp(`(?<![\\p{L}\\p{N}])(?:${LABEL}\\.)+(?:\\p{L}{2,63}|xn--[a-z0-9-]{1,59})(?![\\p{L}\\p{N}-])\\S*`, 'giu');
 const NOT_ALLOWED = /[^\p{L}\p{M}\p{N} .,'’&()/:#%+-]/gu;
 
 /** Step 1 alone: the form every other check compares against. */

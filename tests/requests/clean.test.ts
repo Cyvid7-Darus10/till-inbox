@@ -17,6 +17,12 @@ describe('cleaning text from an email', () => {
     }
   });
 
+  it('removes a hostname written straight after a hyphen or a dash', () => {
+    expect(clean('pay at -evil.com now')).toBe('pay at - now');
+    expect(clean('order 1042-evil.co.uk/path today')).toBe('order today');
+    expect(clean('Zoë Ngô-Smith')).toBe('Zoë Ngô-Smith');
+  });
+
   it('removes URLs, schemes and email addresses', () => {
     expect(clean('see https://evil.example/x or HTTP://EVIL.EXAMPLE')).toBe('see or');
     expect(clean('write to billing@pay-update.example now')).toBe('write to now');
