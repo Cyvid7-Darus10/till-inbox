@@ -8,15 +8,18 @@ sends it.
 
 > **Disclaimer.** Till Inbox is an open-source sample built on Airwallex. It is not an official
 > Airwallex product and is not supported by Airwallex. It is provided as is, without warranty, under
-> the Apache License 2.0. It runs against the Airwallex sandbox by default and has not yet been run
-> end to end with a real inbox and a real Slack workspace. Read the full [Disclaimer](#disclaimer)
+> the Apache License 2.0. It runs against the Airwallex sandbox by default. Its author ran it end to
+> end once, on 13 November 2026, on the Airwallex sandbox with a real inbox and a real Slack
+> workspace; it has not been used with real customers or a production Airwallex account. Read the
+> full [Disclaimer](#disclaimer)
 > before you use it with real customers or a live Airwallex account.
 
-![A terminal runs npm run simulate on two sample emails. In the first, with one plain amount (AUD 640), the signed webhook and the model's reading are checked, an approval card goes to two admins, a click from someone who is not an admin is ignored, and Approve creates one payment link and a reply. In the second, a café email with a unit price and a total, the card has no Approve button and lists the amounts mentioned, and an admin types AUD 950.](docs/demo.gif)
+![A real run on the Airwallex sandbox. Noah emails to ask how to pay AUD 640. Alex, the finance admin, gets an approval card in a Slack DM and presses Approve. A payment link is created with her own Airwallex login, the reply with the link appears in the thread, and "Has it been paid?" answers not yet. The same link then shows in the Airwallex web app.](docs/demo.gif)
 
-A simulated run on two sample emails, using stand-ins for Slack and Airwallex. Recorded 13 November
-2026. A recording of a real run will replace this after the first end-to-end run.
-[Watch it as a video](docs/demo.mp4).
+A recording of a real run on the Airwallex sandbox, 13 November 2026: a real email through Resend,
+real Slack cards and buttons, and real sandbox payment links. The companies and people are made up.
+The full video also shows an email with two numbers, where the admin types the amount, and an email
+that tries to give the AI orders. [Watch it as a video](docs/demo.mp4).
 
 Till Inbox is the email version of [Till](https://github.com/Cyvid7-Darus10/till) and
 [Till in DMs](https://github.com/Cyvid7-Darus10/till-dm). Like them, it reaches Airwallex through the
@@ -44,33 +47,34 @@ An email with more than one number ("25 kg at AUD 38 a kilo, AUD 950 in total") 
 no Approve button: Amount: Not stated · Amounts mentioned: AUD 38, AUD 950 · (Set amount) (Reject).
 ```
 
-> **What is real (checked 2026-11-12, re-checked 2026-11-13)**
+> **What is real (checked 2026-11-12 and 2026-11-13)**
 >
-> Run for real on 12 November:
-> - The model step: `openai/gpt-5` through Vercel AI Gateway read the example emails in
->   `fixtures/emails/` (`npm run read-email`): AUD 950 from the café email, no amount from the one
->   without, and it flagged the injection attempt. On 13 November it read AUD 640 from the
->   single-amount email. Those readings are saved in the fixtures.
-> - The Airwallex step: the app's own approval code created one payment link in an Airwallex
->   sandbox through Vercel Connect, with a per-login grant and no API key. Calling it again for the
->   same request returned the same link instead of a second one, and the status read back as unpaid
->   (`npm run live-link`). The tool names and arguments were checked against the sandbox MCP server.
-> - The inbound webhook on a Vercel preview deployment: an unsigned request and one with a bad
->   signature got 401, a signed event of another type got 200 and was ignored, and a signed
->   `email.received` got 200 and then tried to fetch the email from Resend (with a placeholder key,
->   so Resend refused it and the app logged only the status).
+> Run for real end to end on 13 November 2026, on the Airwallex sandbox, by the author, with a
+> production deployment, a real Resend inbox and a real Slack workspace:
+> - The four example emails were sent to the Resend receiving address. Each became an approval card
+>   in the admin's Slack DM about 10 to 16 seconds later.
+> - One plain amount (`single-amount.json`, AUD 640): one-click Approve. The first Approve asked the
+>   admin to connect their Airwallex sandbox; after that, Approve created one payment link in 5 to
+>   10 seconds, the reply with the link appeared in the thread, and "Has it been paid?" read the
+>   status back as not paid. The link was checked in the Airwallex web app and by its reference.
+> - Several numbers (`opening-order.json`, AUD 38 a kilo, AUD 950 in total): no Approve button. The
+>   admin typed AUD 950 in the "Set amount" form, then approved, and one link was created.
+> - No amount (`no-amount.json`): "Set amount" and "Reject" only.
+> - Injection attempt (`injection.json`): flagged, no one-click Approve, the amount left for a person.
+>   The test emails were sent from a domain that passes DMARC, so the "NOT VERIFIED" sender line was
+>   not seen live; the tests cover it.
+> - Duplicates: Approve pressed in two Slack windows at the same moment created one link (the second
+>   click was refused as busy), a double click sent Slack only one request, and a webhook delivery
+>   replayed from Resend was ignored as a duplicate. Slack does not retry button clicks, so a Slack
+>   retry was not tested live.
+> - Reject closed the card with "Nothing was created".
+> - The webhook route refused unsigned requests (401) on production and on a preview.
+> - One fix came out of this run: the model sometimes flagged an honest "could you send me a link"
+>   as an instruction to it. Its instructions now say that a customer's request to the business is
+>   not one.
 >
-> Run only against stand-ins:
-> - Receiving a real email from Resend, the Slack cards, buttons and amount form, and sending a
->   reply. `npm run simulate` runs that whole flow with stand-ins, and the tests cover it, but it has
->   not yet been run with a real inbox and a real Slack workspace. [First real run](#first-real-run)
->   lists what that takes. The demo above is that simulation.
->
-> Re-checked on 13 November: the tests, type check and lint pass, `npm run simulate` gives the
-> results described here on all four emails, and the preview's logs show the unsigned, bad-signature and
-> signed `email.received` results (an ignored event leaves no log line). The model and sandbox runs
-> were not repeated. The amount check was made much stricter on 13 November, after those runs:
-> the café email's AUD 950 is no longer one-click (see "The email is untrusted input").
+> Not run for real: sending the reply by email (`TILL_SEND_REPLY_EMAIL`, off by default), more than
+> one admin, a live Airwallex account, and real customers.
 
 ## Try it without any accounts
 
@@ -310,7 +314,7 @@ once, revoke their grant in Vercel Connect.
 
 ### First real run
 
-What was not yet run for real, and how to finish it:
+How the first real run was done, and how to repeat it on your own accounts:
 
 1. Create the Resend account and receiving address, and the webhook and API key (step 4).
 2. Create and install the `slack/till-inbox` connector and attach it with triggers (step 2).
@@ -390,9 +394,10 @@ does not exist in production.
   and Airwallex does not support it.
 - It is provided as is, without warranty of any kind, under the Apache License 2.0. See sections 7
   and 8 of the [LICENSE](LICENSE).
-- It runs against the Airwallex sandbox by default. It has not been run end to end with a real
-  inbox and a real Slack workspace. The "What is real" box above says which parts have been run,
-  and when.
+- It runs against the Airwallex sandbox by default. Its author ran it end to end once, on 13
+  November 2026, on the Airwallex sandbox with a real inbox and a real Slack workspace. It has not
+  been used with real customers or a production Airwallex account. The "What is real" box above says
+  which parts have been run, and when.
 - It reads email from anyone on the internet and creates payment links. If you deploy it, you are
   responsible for your own review, security, compliance, data-protection obligations and testing
   before you use it with real customers or a production Airwallex account.
