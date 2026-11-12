@@ -62,6 +62,8 @@ export const COPY = {
   thread: {
     amountUpdated: (admin: string, amount: string) => `${plainText(admin)} set the amount to ${amount}.`,
     amountProblem: (problem: string) => `I didn't change the amount. ${problem}`,
+    overLimit: (maxAmount: number) =>
+      `I didn't create a payment link. The amount is above the limit of ${maxAmount.toLocaleString('en-US')}. Edit the amount, or create the link in Airwallex yourself.`,
     connect: {
       title: 'Connect your Airwallex',
       body: 'Approving creates the payment link with your own Airwallex login. Sign in once, then press Approve again.',

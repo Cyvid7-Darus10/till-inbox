@@ -23,7 +23,8 @@ export type DecisionOutcome =
   | 'failed'
   | 'rejected'
   | 'amount-set'
-  | 'amount-refused';
+  | 'amount-refused'
+  | 'over-limit';
 
 async function withLock(deps: FlowDeps, key: string, work: () => Promise<DecisionOutcome>): Promise<DecisionOutcome> {
   if (deps.locks.has(key)) return 'busy';
@@ -48,6 +49,17 @@ export const senderIsVerified = (pending: PendingRequest): boolean => !pending.w
 
 const clickFor = (action: Action, click: Omit<Click, 'action'>): Click => ({ ...click, action });
 
+/**
+ * The amount was checked against TILL_MAX_AMOUNT when the card was made, but the limit may have been
+ * lowered since: check again before anything is created. True when the request was refused.
+ */
+async function refusedOverLimit(pending: PendingRequest, card: PendingRequest['cards'][number], deps: FlowDeps): Promise<boolean> {
+  if (pending.amount !== null && pending.amount <= deps.settings.maxAmount) return false;
+  log.warn('approval refused: amount above the limit', { requestId: pending.requestId });
+  await deps.chat.postInThread(card, { kind: 'text', text: COPY.thread.overLimit(deps.settings.maxAmount) });
+  return true;
+}
+
 /** Approve: close the cards, then create the link with the approver's own Airwallex login. */
 export async function approve(value: PendingRequest | null, click: Omit<Click, 'action'>, deps: FlowDeps): Promise<DecisionOutcome> {
   const ok = accepted(value, clickFor('approve', click));
@@ -55,6 +67,7 @@ export async function approve(value: PendingRequest | null, click: Omit<Click, '
   const { pending, card } = ok;
   return withLock(deps, pending.requestId, async () => {
     if (!(await deps.chat.allOpen(pending))) return 'decided';
+    if (await refusedOverLimit(pending, card, deps)) return 'over-limit';
     if (!(await deps.payments.isConnected(click.clicker))) {
       // The cards keep their buttons, so this admin (or another) can approve after signing in.
       await deps.chat.postInThread(card, { kind: 'connect', url: await deps.payments.connectUrl(click.clicker) });

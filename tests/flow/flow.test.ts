@@ -111,6 +111,16 @@ describe('approve', () => {
     expect(await world.chat.allOpen(pending)).toBe(true);
   });
 
+  it('refuses an amount above the limit at approval time, says why, and keeps the cards open', async () => {
+    const { world, pending } = await emailIn('single-amount');
+    world.payments.connected.add(ADMIN);
+    const lowered = { ...world.deps, settings: { ...world.deps.settings, maxAmount: 500 } };
+    expect(await approve(pending, clickOn(pending, 0), lowered)).toBe('over-limit');
+    expect(world.payments.createCalls).toBe(0);
+    expect(world.chat.threadPosts.at(-1)?.post).toMatchObject({ kind: 'text', text: expect.stringContaining('above the limit of 500') });
+    expect(await world.chat.allOpen(pending)).toBe(true);
+  });
+
   it('ignores someone who is not an admin, and a tampered button', async () => {
     const { world, pending } = await emailIn('single-amount');
     world.payments.connected.add(OUTSIDER);

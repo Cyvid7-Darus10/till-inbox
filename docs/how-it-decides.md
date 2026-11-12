@@ -37,8 +37,10 @@ hold:
 
 Otherwise the card has no Approve button, only "Set amount" and "Reject", and lists the amounts the
 email mentions. The admin types the amount, which redraws the card with an Approve button, and then
-approves. Most real emails with line items, unit prices or several figures will need an admin to type
-the amount. Remaining edge cases are not chased in code: anything unclear is typed by a person.
+approves. A typed amount is held to the same `TILL_MAX_AMOUNT`, and Approve checks the limit once
+more before creating anything, so a limit lowered after the card was posted still applies. Most real
+emails with line items, unit prices or several figures will need an admin to type the amount.
+Remaining edge cases are not chased in code: anything unclear is typed by a person.
 
 ## The email is untrusted input
 
