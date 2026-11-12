@@ -1,5 +1,6 @@
 import type { InboundEmail } from '../email/provider';
-import { cleanField, normalizeText } from './clean';
+import { amountAtQuote, decimalsOf } from './amount';
+import { cleanField } from './clean';
 import { type Extraction, MAX_NOTE_LENGTH, MAX_PURPOSE_LENGTH } from './extraction';
 
 /**
@@ -57,90 +58,9 @@ const INSTRUCTION_PATTERNS = [
   /\b(approve|create) (this|the) (payment|link|request) (automatically|without)\b/i,
 ];
 
-/** Currency symbols that name exactly one currency. A bare "$" does not. */
-const SYMBOLS: Record<string, string> = { A$: 'AUD', AU$: 'AUD', S$: 'SGD', US$: 'USD', HK$: 'HKD', NZ$: 'NZD', '€': 'EUR', '£': 'GBP' };
-
 export const looksLikeInstructions = (text: string): boolean => INSTRUCTION_PATTERNS.some((pattern) => pattern.test(text));
 
 const AMOUNT_TOLERANCE = 0.005;
-
-/** ISO 4217 codes the runtime knows. A three-letter word counts as a currency only if it is one. */
-const ISO_CODES: ReadonlySet<string> = new Set(Intl.supportedValuesOf('currency'));
-
-// One written number: ASCII digits joined by separators, dashes, or a space before another digit, so
-// a date, a range or a phone number stays one piece ("2026-11-20", "950-1,200", "+61 2 9999 0950").
-const NUMBER = /\d(?:[\d.,\-−–—]|\s(?=[\d\-−–—]))*\d|\d/g;
-// The only shapes read as an amount: 950, 950.5, 950.75, 1,250 and 1,250.00.
-const PLAIN_AMOUNT = /^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?$/;
-// A minus or dash just before a number (a credit or the end of a range), or a # (an id).
-const NOT_AN_AMOUNT_BEFORE = /(?:[-−–—]\s?|#)$/;
-
-export interface WrittenNumber {
-  start: number;
-  end: number;
-  /** The amount it states, or null when it is not one clear positive amount. */
-  value: number | null;
-}
-
-/** Every number written in a piece of text, where it sits, and the amount it clearly states, if any. */
-export function numbersIn(text: string): WrittenNumber[] {
-  return [...text.matchAll(NUMBER)].map((match) => {
-    const start = match.index;
-    const written = match[0];
-    const clear = PLAIN_AMOUNT.test(written) && !NOT_AN_AMOUNT_BEFORE.test(text.slice(Math.max(0, start - 2), start));
-    const value = clear ? Number(written.replace(/,/g, '')) : null;
-    return { start, end: start + written.length, value: value !== null && value > 0 ? value : null };
-  });
-}
-
-/**
- * Every currency a piece of text names: an ISO code written in capitals as a whole word ("AUD", not
- * the word "all"), or a symbol that means only one currency. A symbol counts only when no letter
- * comes right before it, so "US$" does not read as "S$".
- */
-export function currenciesIn(text: string): string[] {
-  const codes = [...text.matchAll(/(?<![A-Za-z])[A-Z]{3}(?![A-Za-z])/g)].map((match) => match[0]).filter((code) => ISO_CODES.has(code));
-  const escapeDollar = (symbol: string) => symbol.replace(/[$]/g, '\\$');
-  const symbols = Object.entries(SYMBOLS)
-    .filter(([symbol]) => new RegExp(`(?<![A-Za-z])${escapeDollar(symbol)}`).test(text))
-    .map(([, code]) => code);
-  return [...new Set([...codes, ...symbols])];
-}
-
-/** Whether the text states this currency. */
-export const currencyStated = (currency: string, text: string): boolean => currenciesIn(text).includes(currency);
-
-/** A currency code in any case ("aud"): named, but not clearly enough to act on. */
-const hasLooseCode = (text: string): boolean =>
-  [...text.matchAll(/(?<![A-Za-z])[A-Za-z]{3}(?![A-Za-z])/g)].some((match) => ISO_CODES.has(match[0].toUpperCase()));
-
-/** One line, normalized, case kept: positions in it are what the checks below compare. */
-const asOneLine = (text: string): string => normalizeText(text).replace(/\s+/g, ' ').trim();
-
-const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/** Where the quote appears in the email, ignoring case. */
-function placesOf(quote: string, text: string): { start: number; end: number }[] {
-  const pattern = new RegExp(escapeRegExp(quote), 'gi');
-  const places: { start: number; end: number }[] = [];
-  for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
-    places.push({ start: match.index, end: match.index + match[0].length });
-    pattern.lastIndex = match.index + 1;
-  }
-  return places;
-}
-
-/**
- * The currency of the total, read from the email itself: the one written at the quote, or, if none
- * is written there, the only one the whole email names. Null when that is not exactly one currency.
- */
-function currencyAt(place: string, emailText: string): string | null {
-  const here = currenciesIn(place);
-  if (here.length > 0) return here.length === 1 ? here[0] : null;
-  if (hasLooseCode(place)) return null;
-  const anywhere = currenciesIn(emailText);
-  return anywhere.length === 1 ? anywhere[0] : null;
-}
 
 interface CheckedAmount {
   amount: number | null;
@@ -148,27 +68,25 @@ interface CheckedAmount {
   warnings: Warning[];
 }
 
+const unclear = (warning: Warning): CheckedAmount => ({ amount: null, currency: null, warnings: [warning] });
+
 /**
- * Keeps the amount only if the email backs it up. The model's quote only says where to look: code
- * finds it in the email, reads every whole number it touches, and keeps the amount only if one of
- * them states it. The currency is read from the email at the same place.
+ * Keeps the amount only if the email itself states it. The model's quote only says where to look:
+ * lib/requests/amount.ts reads the one amount token there with a strict grammar, and the amount and
+ * currency that go on the card are the ones the email states, and must agree with the model's.
  */
 export function checkAmount(extraction: Extraction, emailText: string, settings: UnderstandSettings): CheckedAmount {
-  const { amount, currency, amountQuote } = extraction;
-  if (amount === null) return { amount: null, currency: null, warnings: [WARNINGS.amountNotStated] };
-  const text = asOneLine(emailText);
-  const quote = asOneLine(amountQuote ?? '');
-  const numbers = numbersIn(text);
-  const states = (place: { start: number; end: number }) => (number: WrittenNumber) =>
-    number.start < place.end && number.end > place.start && number.value !== null && Math.abs(number.value - amount) < AMOUNT_TOLERANCE;
-  const place = quote ? placesOf(quote, text).find((candidate) => numbers.some(states(candidate))) : undefined;
-  const written = place ? numbers.find(states(place))?.value : null;
-  if (!place || !written) return { amount: null, currency: null, warnings: [WARNINGS.amountNotInEmail] };
-  if (!currency || currencyAt(text.slice(place.start, place.end), text) !== currency) {
-    return { amount: null, currency: null, warnings: [WARNINGS.currencyNotStated] };
+  const { amount, currency } = extraction;
+  if (amount === null) return unclear(WARNINGS.amountNotStated);
+  const token = amountAtQuote(extraction.amountQuote, emailText);
+  if (!token || token.value === null || token.value <= 0 || Math.abs(token.value - amount) >= AMOUNT_TOLERANCE) {
+    return unclear(WARNINGS.amountNotInEmail);
   }
-  if (written > settings.maxAmount) return { amount: null, currency: null, warnings: [WARNINGS.amountOverLimit] };
-  return { amount: written, currency, warnings: [] };
+  if (!currency || token.currency !== currency) return unclear(WARNINGS.currencyNotStated);
+  const decimals = (token.value.toString().split('.')[1] ?? '').length;
+  if (decimals > decimalsOf(currency)) return unclear(WARNINGS.amountNotInEmail);
+  if (token.value > settings.maxAmount) return unclear(WARNINGS.amountOverLimit);
+  return { amount: token.value, currency, warnings: [] };
 }
 
 // Only DMARC proves the visible From address: SPF and DKIM can pass for another domain. Without a
