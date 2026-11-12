@@ -119,6 +119,25 @@ export function numbersIn(text: string): Span[] {
   return spansOf(text, ANY_NUMBER).filter((number) => !notAmounts.some((span) => inside(number, span)));
 }
 
+/** The numbers in a text, as values ("1,520.50" and "1520.50" are the same), or null if unreadable. */
+function numberValues(emailText: string): Set<string> | null {
+  if (emailText.length > MAX_AMOUNT_TEXT_CHARS || NON_ASCII_DIGIT.test(emailText)) return null;
+  const text = normalizeForAmounts(emailText);
+  return new Set(numbersIn(text).map((span) => text.slice(span.start, span.end).replace(/,/g, '')));
+}
+
+/**
+ * Whether two versions of one email (its text part and its HTML part, as text) show the same
+ * numbers. A mail client shows the HTML part, but the amount rule reads the text part, so a
+ * difference means the admin may see another amount than the card. Fails closed.
+ */
+export function numbersAgree(text: string, otherText: string): boolean {
+  const ours = numberValues(text);
+  const theirs = numberValues(otherText);
+  if (!ours || !theirs || ours.size !== theirs.size) return false;
+  return [...ours].every((value) => theirs.has(value));
+}
+
 /** Every amount written as money (with a code or symbol), as written, for the card. */
 export function moneyMentioned(emailText: string): string[] {
   if (emailText.length > MAX_AMOUNT_TEXT_CHARS || NON_ASCII_DIGIT.test(emailText)) return [];

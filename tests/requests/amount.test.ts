@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moneyMentioned, normalizeForAmounts, numbersIn, readAmount } from '../../lib/requests/amount';
+import { moneyMentioned, normalizeForAmounts, numbersAgree, numbersIn, readAmount } from '../../lib/requests/amount';
 import { checkAmount, WARNINGS } from '../../lib/requests/understand';
 import { loadFixture } from '../fixtures';
 
@@ -288,5 +288,20 @@ describe('the parts of the rule', () => {
     expect(readAmount(null, 'AUD 950')).toEqual({ kind: 'unclear', reason: 'not-found' });
     expect(readAmount('   ', 'AUD 950')).toEqual({ kind: 'unclear', reason: 'not-found' });
     expect(readAmount('AUD 950', 'Please pay AUD 950 today.')).toEqual({ kind: 'clear', value: 950, currency: 'AUD' });
+  });
+});
+
+describe('comparing the text and HTML parts of an email', () => {
+  it('agrees when both show the same numbers, however the thousands are written', () => {
+    expect(numbersAgree('Please pay AUD 1,520.50 by 2026-11-20.', 'Please pay <b>AUD 1520.50</b> by 2026-11-20.')).toBe(true);
+    expect(numbersAgree('No amount here.', 'No amount here either.')).toBe(true);
+  });
+
+  it('disagrees when a number is missing, added or different, and when either part is unreadable', () => {
+    expect(numbersAgree('Pay AUD 640.', 'Pay AUD 6,400.')).toBe(false);
+    expect(numbersAgree('Pay AUD 640.', 'Pay AUD 640, or AUD 900 for two.')).toBe(false);
+    expect(numbersAgree('Pay AUD 640.', 'Pay AUD.')).toBe(false);
+    expect(numbersAgree('Pay AUD 640.', 'Pay AUD ٦٤٠.')).toBe(false);
+    expect(numbersAgree('Pay AUD 640.', `Pay AUD 640.${' '.repeat(9_000)}`)).toBe(false);
   });
 });

@@ -34,6 +34,10 @@ hold:
 - It is not above `TILL_MAX_AMOUNT` (10,000 by default).
 - The email was not cut to fit the 8,000-character limit, and it does not look like it tries to
   instruct an assistant.
+- If the email has both a plain-text and a formatted (HTML) version, both show the same numbers.
+  The rule reads the plain text, but a mail client shows the formatted version, so when they
+  differ the card says so and an admin types the amount. Numbers that only one version carries,
+  such as a year in a formatted footer or digits in a link, are enough to make them differ.
 
 Otherwise the card has no Approve button, only "Set amount" and "Reject", and lists the amounts the
 email mentions. The admin types the amount, which redraws the card with an Approve button, and then

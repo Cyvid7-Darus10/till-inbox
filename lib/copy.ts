@@ -9,6 +9,8 @@ export const WARNING_TEXT: Record<Warning, string> = {
   'currency-not-stated': 'The email does not make the currency clear. Set the amount and currency before approving.',
   'several-numbers': 'The email mentions more than one number, so a person types the amount.',
   'amount-not-plain': 'The amount reads as a rate, an estimate, or an old or corrected figure, so a person types the amount.',
+  'parts-disagree':
+    'The plain-text and formatted versions of this email show different numbers, so a person types the amount. Read the email itself.',
   'amount-over-limit': 'The amount is above the limit for a link. Set a smaller amount, or create the link in Airwallex yourself.',
   'instructions-in-email':
     'This email contains instructions aimed at an assistant. They were ignored, and the amount must be typed in by hand. Read the email itself before you approve.',

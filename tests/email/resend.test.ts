@@ -77,6 +77,16 @@ describe('turning a received email into the DTO', () => {
     expect(email.receivedAt).toBe('2026-11-12T08:30:00.123Z');
   });
 
+  it('keeps the HTML part as text beside the text part, so their amounts can be compared', () => {
+    const base = { id: 'em_3', created_at: '2026-11-12T08:30:00Z', from: 'billing@example.com', authentication: null };
+    const both = toInboundEmail({ ...base, text: 'Pay AUD 10', html: '<p>Pay <b>AUD 100</b></p>' });
+    expect(both).toMatchObject({ text: 'Pay AUD 10', htmlText: 'Pay AUD 100', clipped: false });
+    expect(toInboundEmail({ ...base, text: 'Pay AUD 10', html: null }).htmlText).toBeNull();
+    expect(toInboundEmail({ ...base, text: null, html: '<p>Pay AUD 10</p>' })).toMatchObject({ text: 'Pay AUD 10', htmlText: null });
+    const longHtml = toInboundEmail({ ...base, text: 'Pay AUD 10', html: `<p>${'x'.repeat(210_000)}</p>` });
+    expect(longHtml.clipped).toBe(true);
+  });
+
   it("reads Resend's documented sender check values, and treats anything else as unknown", () => {
     const { raw } = loadFixture('opening-order');
     const checks = (authentication: unknown) => toInboundEmail({ ...raw.email, authentication }).auth;

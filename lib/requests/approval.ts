@@ -58,6 +58,7 @@ const AMOUNT_WARNINGS: readonly string[] = [
   WARNINGS.amountOverLimit,
   WARNINGS.severalNumbers,
   WARNINGS.amountNotPlain,
+  WARNINGS.partsDisagree,
 ];
 
 export type AmountEdit = { ok: true; pending: PendingRequest } | { ok: false; problem: string };

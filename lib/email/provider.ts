@@ -19,7 +19,12 @@ export const inboundEmailSchema = z.object({
   subject: z.string().max(300),
   /** Plain text, already cut to the model's limit. */
   text: z.string(),
-  /** True when the text was cut. */
+  /**
+   * The HTML part as text, only when the email also has a text part (otherwise `text` already is
+   * the HTML). Cut to the same limit. The amount rule checks both parts show the same numbers.
+   */
+  htmlText: z.string().nullable(),
+  /** True when the text, or the HTML part beside it, was cut. */
   clipped: z.boolean(),
   /** Sender checks the provider ran. A spoofed From address usually fails DMARC. */
   auth: z.object({ spf: authResultSchema, dkim: authResultSchema, dmarc: authResultSchema }),

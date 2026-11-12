@@ -66,8 +66,10 @@ export function toInboundEmail(json: unknown): InboundEmail {
   const html = email.html ?? '';
   const body = textPart || htmlToText(html);
   const { text, clipped } = clipText(body);
+  // With both parts, the HTML is kept as text too, so the amount rule can compare them.
+  const alternative = textPart && html ? clipText(htmlToText(html)) : null;
   // HTML beyond MAX_HTML_CHARS was never read, so the email counts as cut too.
-  const htmlCut = !textPart && html.length > MAX_HTML_CHARS;
+  const htmlCut = Boolean(html) && html.length > MAX_HTML_CHARS;
   return inboundEmailSchema.parse({
     id: email.id,
     messageId: email.message_id ?? null,
@@ -75,7 +77,8 @@ export function toInboundEmail(json: unknown): InboundEmail {
     from,
     subject: (email.subject ?? '').slice(0, 300),
     text,
-    clipped: clipped || htmlCut,
+    htmlText: alternative?.text ?? null,
+    clipped: clipped || htmlCut || Boolean(alternative?.clipped),
     auth: {
       spf: authResult(email.authentication?.spf),
       dkim: authResult(email.authentication?.dkim),

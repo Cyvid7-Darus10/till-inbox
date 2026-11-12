@@ -171,6 +171,7 @@ in [docs/code-tour.md](docs/code-tour.md).
   Redis, and a Vercel Firewall rate limit rule on `/api/webhooks/email`, before heavy use.
 - Most real emails with line items, unit prices or several figures will need a typed amount.
 - Only the first 8,000 characters of an email are read, and the card says when it was cut.
+- An email whose plain-text and formatted versions show different numbers needs a typed amount.
 - One link per email. A reply in the same thread is a new email and a new card.
 - At most five admins, because every card's buttons list every card.
 - If Airwallex returns a link that doesn't match the approval, the app says "Don't send it" but

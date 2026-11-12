@@ -29,6 +29,24 @@ describe('a clear request', () => {
   });
 });
 
+describe('an email with a text part and an HTML part', () => {
+  it('keeps the one-click amount when both parts show the same numbers', () => {
+    const { email, reading } = loadFixture('single-amount');
+    const htmlText =
+      "Hi Kopi Lane team, Could you send me a link so I can pay for this week's Lane House Blend by card? The invoice says AUD 640.";
+    expect(understand({ ...email, htmlText }, reading, settings)).toMatchObject({ amount: 640, currency: 'AUD', warnings: [] });
+  });
+
+  it('drops the amount and says so when the formatted version shows a different number', () => {
+    const { email, reading } = loadFixture('single-amount');
+    const htmlText = 'Hi Kopi Lane team, could you send me a link? The invoice says AUD 6,400.';
+    const result = understand({ ...email, htmlText }, reading, settings);
+    expect(result).toMatchObject({ kind: 'payment', amount: null, currency: null, warnings: [WARNINGS.partsDisagree] });
+    if (result.kind !== 'payment') throw new Error('expected a payment request');
+    expect(result.mentioned).toEqual(['AUD 640', 'AUD 6,400']);
+  });
+});
+
 describe('an email with several numbers', () => {
   it('gives the café email no amount, and lists the amounts it mentions', () => {
     const { email, reading } = loadFixture('opening-order');

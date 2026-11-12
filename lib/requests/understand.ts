@@ -1,5 +1,5 @@
 import type { InboundEmail } from '../email/provider';
-import { type AmountReading, decimalsOf, moneyMentioned, readAmount } from './amount';
+import { type AmountReading, decimalsOf, moneyMentioned, numbersAgree, readAmount } from './amount';
 import { cleanField } from './clean';
 import { type Extraction, MAX_NOTE_LENGTH, MAX_PURPOSE_LENGTH } from './extraction';
 
@@ -17,6 +17,7 @@ export const WARNINGS = {
   amountOverLimit: 'amount-over-limit',
   severalNumbers: 'several-numbers',
   amountNotPlain: 'amount-not-plain',
+  partsDisagree: 'parts-disagree',
   instructionsInEmail: 'instructions-in-email',
   senderNotVerified: 'sender-not-verified',
   emailClipped: 'email-clipped',
@@ -99,6 +100,20 @@ export function checkAmount(extraction: Extraction, emailText: string, settings:
 // DMARC result the sender counts as unverified.
 export const senderVerified = (email: Pick<InboundEmail, 'auth'>): boolean => email.auth.dmarc === 'pass';
 
+const MAX_MENTIONED = 10;
+
+/** Amounts written as money in either part of the email, for the card. */
+const mentionedIn = (email: Pick<InboundEmail, 'text' | 'htmlText'>): string[] =>
+  [...new Set([...moneyMentioned(email.text), ...(email.htmlText === null ? [] : moneyMentioned(email.htmlText))])].slice(0, MAX_MENTIONED);
+
+/** Reads the amount, unless something about the email means a person must type it. */
+function amountFor(email: InboundEmail, extraction: Extraction, injected: boolean, settings: UnderstandSettings): CheckedAmount {
+  if (injected || email.clipped) return { amount: null, currency: null, warnings: [] };
+  // The admin's mail client shows the HTML part; the rule reads the text part. They must agree.
+  if (email.htmlText !== null && !numbersAgree(email.text, email.htmlText)) return unclear(WARNINGS.partsDisagree);
+  return checkAmount(extraction, email.text, settings);
+}
+
 export function understand(email: InboundEmail, extraction: Extraction, settings: UnderstandSettings): Understood {
   const customer: Customer = {
     name: cleanField(extraction.customerName, 120) ?? cleanField(email.from.name, 120),
@@ -112,8 +127,7 @@ export function understand(email: InboundEmail, extraction: Extraction, settings
   // An email that tries to instruct the assistant never gets a one-click Approve: the injected text
   // may itself contain a plausible amount, so an admin must type the amount in by hand.
   // A cut email may hold the real total in the part nobody read, so it gets no one-click Approve either.
-  const checked =
-    injected || email.clipped ? { amount: null, currency: null, warnings: [] } : checkAmount(extraction, email.text, settings);
+  const checked = amountFor(email, extraction, injected, settings);
   const flags: Warning[] = [
     ...(injected ? [WARNINGS.instructionsInEmail] : []),
     ...(senderVerified(email) ? [] : [WARNINGS.senderNotVerified]),
@@ -130,6 +144,6 @@ export function understand(email: InboundEmail, extraction: Extraction, settings
     confidence: extraction.confidence,
     note,
     warnings: [...checked.warnings, ...flags],
-    mentioned: moneyMentioned(email.text),
+    mentioned: mentionedIn(email),
   };
 }
