@@ -2,6 +2,7 @@ import type { Extractor } from '../agent/extract';
 import type { PaymentLink } from '../airwallex/payment-links';
 import { COPY, WARNING_TEXT } from '../copy';
 import type { OutboundEmail } from '../email/provider';
+import { userTag } from '../log';
 import { actionsFor } from '../requests/approval';
 import type { CreatedLink } from '../requests/created';
 import type { Extraction } from '../requests/extraction';
@@ -15,6 +16,9 @@ import type { ApprovalChat, FlowDeps, FlowSettings, Payments, ThreadPost } from 
  * `npm run simulate` use them, so the whole flow runs with no accounts. Each one records what
  * happened and can print it.
  */
+
+/** Stands in for TILL_STATE_SECRET in the fakes. Not a real secret. */
+const FAKE_STATE_SECRET = 'fake state secret for the local simulation';
 
 export type Printer = (line: string) => void;
 
@@ -252,6 +256,7 @@ export function fakeWorld(options: {
       extract: fixedExtractor(options.reading),
       email: mailer,
       settings,
+      userTag: (slackUserId) => userTag(slackUserId, FAKE_STATE_SECRET),
       locks: new Set(),
       now: options.now ?? (() => new Date('2026-11-12T09:00:00Z')),
     },

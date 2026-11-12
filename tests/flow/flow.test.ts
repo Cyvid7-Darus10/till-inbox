@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { approve, checkPaid, reject, sendReply, setAmount } from '../../lib/flow/decisions';
 import { fakeWorld } from '../../lib/flow/fakes';
 import { handleEmail } from '../../lib/flow/inbound';
@@ -127,6 +127,33 @@ describe('approve', () => {
     expect(await approve(pending, clickOn(pending, 0, OUTSIDER), world.deps)).toBe('ignored');
     expect(await approve(null, clickOn(pending, 0), world.deps)).toBe('ignored');
     expect(world.payments.links).toHaveLength(0);
+  });
+});
+
+describe('logs', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('never name the Slack user who clicked, only a short tag', async () => {
+    const lines: string[] = [];
+    const record = (line: unknown) => {
+      lines.push(String(line));
+    };
+    vi.spyOn(console, 'info').mockImplementation(record);
+    vi.spyOn(console, 'error').mockImplementation(record);
+    const { world, pending } = await emailIn('single-amount');
+    world.payments.connected.add(ADMIN);
+    await approve(pending, clickOn(pending, 0, OUTSIDER), world.deps);
+    await setAmount(pending, clickOn(pending, 0, OUTSIDER), { amount: '1', currency: 'AUD' }, world.deps);
+    await approve(pending, clickOn(pending, 0), world.deps);
+    const created = createdFrom(world);
+    await checkPaid(created, clickOn(pending, 0, OUTSIDER), world.deps);
+    await sendReply(created, clickOn(pending, 0, OUTSIDER), world.deps);
+    expect(lines.length).toBeGreaterThan(3);
+    for (const line of lines) {
+      expect(line).not.toContain(OUTSIDER);
+      expect(line).not.toContain(ADMIN);
+    }
+    expect(lines.some((line) => /"user":"[0-9a-f]{8}"/.test(line))).toBe(true);
   });
 });
 

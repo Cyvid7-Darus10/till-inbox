@@ -10,7 +10,7 @@ import { COPY } from '../copy';
 import { resendProvider } from '../email/resend';
 import { approve, checkPaid, reject, sendReply, setAmount } from '../flow/decisions';
 import type { ApprovalChat, FlowDeps, ThreadPost } from '../flow/ports';
-import { log } from '../log';
+import { log, userTag } from '../log';
 import { channelOf } from '../requests/approval';
 import { decodeCreated } from '../requests/created';
 import { decodeModalContext } from '../requests/modal-context';
@@ -147,6 +147,7 @@ export function deps(): FlowDeps {
       companyName: settings.companyName,
       sendReplyEmail: settings.sendReplyEmail,
     },
+    userTag: (slackUserId) => userTag(slackUserId, settings.stateSecret),
     locks: new Set(),
     now: () => new Date(),
   };
@@ -198,7 +199,7 @@ export function registerHandlers(): void {
     // A bad or missing signature is logged inside decodeModalContext; the form just closes.
     const context = decodeModalContext(event.privateMetadata, secret());
     if (!context) {
-      log.warn('ignored an amount form with unreadable context', { userId: event.user.userId });
+      log.warn('ignored an amount form with unreadable context', { user: userTag(event.user.userId, secret()) });
       return;
     }
     const { pending, threadId, messageId } = context;

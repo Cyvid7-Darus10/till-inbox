@@ -100,9 +100,10 @@ What the code protects against:
   `tests/pathological-input.test.ts` feeds each parser hostile input and checks it finishes quickly.
 - **Header injection.** The reply's subject is fixed text, the recipient is a validated address, and
   the original Message-ID is used for threading only if it is a single well-formed line.
-- **Personal data in logs.** Logs carry ids, counts and fixed codes. Fields whose names suggest
-  personal data are redacted, and errors from the AI SDK, which can quote the model's output, are
-  logged by name only.
+- **Personal data in logs.** Logs carry request ids, counts and fixed codes. A Slack user appears
+  only as a short tag (the first 8 hex characters of SHA-256 over `TILL_STATE_SECRET` and the user
+  id), never as the id itself. Fields whose names suggest personal data are redacted, and errors
+  from the AI SDK, which can quote the model's output, are logged by name only.
 - **Wrong or unexpected links.** A link is shown only if Airwallex returned it on an https
   airwallex.com address with the approved amount and currency.
 

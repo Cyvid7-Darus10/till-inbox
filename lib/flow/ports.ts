@@ -59,6 +59,8 @@ export interface FlowDeps {
   extract: Extractor;
   email: Pick<EmailProvider, 'sendEmail'>;
   settings: FlowSettings;
+  /** A short, non-reversible tag for a Slack user id, for logs (lib/log.ts userTag). */
+  userTag: (slackUserId: string) => string;
   /** Request ids being worked on in this instance, so a double click waits for the first. */
   locks: Set<string>;
   now: () => Date;

@@ -36,10 +36,14 @@ async function withLock(deps: FlowDeps, key: string, work: () => Promise<Decisio
   }
 }
 
-function accepted(pending: PendingRequest | null, click: Click): { pending: PendingRequest; card: PendingRequest['cards'][number] } | null {
+function accepted(
+  deps: FlowDeps,
+  pending: PendingRequest | null,
+  click: Click,
+): { pending: PendingRequest; card: PendingRequest['cards'][number] } | null {
   const check = checkClick(pending, click);
   if (!pending || !check.ok) {
-    log.warn('ignored a click', { reason: check.ok ? 'invalid' : check.reason, action: click.action, userId: click.clicker });
+    log.warn('ignored a click', { reason: check.ok ? 'invalid' : check.reason, action: click.action, user: deps.userTag(click.clicker) });
     return null;
   }
   return { pending, card: check.card };
@@ -62,7 +66,7 @@ async function refusedOverLimit(pending: PendingRequest, card: PendingRequest['c
 
 /** Approve: close the cards, then create the link with the approver's own Airwallex login. */
 export async function approve(value: PendingRequest | null, click: Omit<Click, 'action'>, deps: FlowDeps): Promise<DecisionOutcome> {
-  const ok = accepted(value, clickFor('approve', click));
+  const ok = accepted(deps, value, clickFor('approve', click));
   if (!ok) return 'ignored';
   const { pending, card } = ok;
   return withLock(deps, pending.requestId, async () => {
@@ -122,7 +126,7 @@ export async function approve(value: PendingRequest | null, click: Omit<Click, '
 }
 
 export async function reject(value: PendingRequest | null, click: Omit<Click, 'action'>, deps: FlowDeps): Promise<DecisionOutcome> {
-  const ok = accepted(value, clickFor('reject', click));
+  const ok = accepted(deps, value, clickFor('reject', click));
   if (!ok) return 'ignored';
   const { pending } = ok;
   return withLock(deps, pending.requestId, async () => {
@@ -140,7 +144,7 @@ export async function setAmount(
   input: { amount: string; currency: string; purpose?: string },
   deps: FlowDeps,
 ): Promise<DecisionOutcome> {
-  const ok = accepted(value, clickFor('edit-amount', click));
+  const ok = accepted(deps, value, clickFor('edit-amount', click));
   if (!ok) return 'ignored';
   const { pending, card } = ok;
   return withLock(deps, pending.requestId, async () => {
@@ -179,7 +183,7 @@ export async function checkPaid(
   deps: FlowDeps,
 ): Promise<'answered' | 'ignored' | 'needs-login'> {
   if (!linkClickOk(created, click)) {
-    log.warn('ignored a status click', { userId: click.clicker });
+    log.warn('ignored a status click', { user: deps.userTag(click.clicker) });
     return 'ignored';
   }
   const card = created.pending.cards[0];
@@ -196,7 +200,7 @@ export async function checkPaid(
 /** "Send reply", only when TILL_SEND_REPLY_EMAIL is true: emails the reply to the original sender, once. */
 export async function sendReply(created: CreatedLink | null, click: LinkClick, deps: FlowDeps): Promise<'sent' | 'ignored' | 'failed'> {
   if (!linkClickOk(created, click) || !deps.settings.sendReplyEmail || !senderIsVerified(created.pending)) {
-    log.warn('ignored a send click', { userId: click.clicker });
+    log.warn('ignored a send click', { user: deps.userTag(click.clicker) });
     return 'ignored';
   }
   const { pending, link } = created;

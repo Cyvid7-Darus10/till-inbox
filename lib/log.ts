@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 // Structured logs, one JSON line each: timestamp, level, request_id, message, then context.
 // Email bodies, addresses, names, tokens and amounts never belong in a log line. As a safety net,
 // any context key that names one of them is replaced with "[redacted]".
@@ -31,6 +33,16 @@ function write(level: Level, message: string, context?: LogContext): void {
   if (level === 'error') console.error(line);
   else console.info(line);
 }
+
+/** Hex characters kept from a user tag: enough to tell admins apart in the logs. */
+const USER_TAG_LENGTH = 8;
+
+/**
+ * A short tag for a Slack user, for logs: the first 8 hex characters of SHA-256 over the secret and
+ * the id. The same person gets the same tag, but the id itself never reaches a log line.
+ */
+export const userTag = (slackUserId: string, secret: string): string =>
+  createHash('sha256').update(`${secret}\n${slackUserId}`).digest('hex').slice(0, USER_TAG_LENGTH);
 
 export const log = {
   info: (message: string, context?: LogContext) => write('info', message, context),

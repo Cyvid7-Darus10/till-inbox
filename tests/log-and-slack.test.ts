@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { COPY, WARNING_TEXT } from '../lib/copy';
-import { formatLine, log } from '../lib/log';
+import { formatLine, log, userTag } from '../lib/log';
 import { WARNINGS } from '../lib/requests/understand';
 import { hasButton, hasButtons } from '../lib/slack/card-state';
 import { duplicateReason } from '../lib/slack/events';
@@ -45,6 +45,14 @@ describe('structured logs', () => {
     });
     expect(JSON.parse(formatLine('error', 'x', { error: aiError })).error).toEqual({ name: 'AI_TypeValidationError' });
     expect(JSON.parse(formatLine('error', 'x', { error: new Error('y'.repeat(1000)) })).error.message).toHaveLength(300);
+  });
+
+  it('tags a Slack user with a short value that cannot be turned back into the id', () => {
+    const tag = userTag('UADMIN0001', 'a test state secret for slack buttons, not a real one');
+    expect(tag).toMatch(/^[0-9a-f]{8}$/);
+    expect(tag).toBe(userTag('UADMIN0001', 'a test state secret for slack buttons, not a real one'));
+    expect(tag).not.toBe(userTag('UADMIN0002', 'a test state secret for slack buttons, not a real one'));
+    expect(tag).not.toBe(userTag('UADMIN0001', 'another secret entirely, also not a real one'));
   });
 
   it('sends errors to stderr and the rest to stdout', () => {
