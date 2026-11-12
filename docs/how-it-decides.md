@@ -130,8 +130,10 @@ The main limits are in the [README](../README.md#limits). These are smaller ones
   new one. The card shows the amount; check it against the latest message.
 - The check for an existing link reads at most 200 links created since shortly before the email
   arrived.
-- The email is read after the webhook answers. If that fails, the error is logged and the provider
-  does not retry.
+- The email is read after the webhook answers, and the provider does not retry. If reading it or
+  making the card fails, the error is logged and each admin gets a DM saying an email arrived at that
+  time and could not be read, with its email id and nothing from the email. If that DM fails too, it
+  is only logged.
 - If two admins edit the amount at the same moment, the last one wins.
 - A failed "Send reply" removes the button anyway; copy the reply from the thread instead.
 

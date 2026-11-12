@@ -109,6 +109,9 @@ const slackChat: ApprovalChat = {
     const who = customer.name ?? customer.email;
     await Promise.all(admins.map(async (adminId) => (await bot().openDM(adminId)).post(noticeCard(who, subject, note))));
   },
+  async postAlert(admins, text) {
+    await Promise.all(admins.map(async (adminId) => (await bot().openDM(adminId)).post(text)));
+  },
   refreshCards: (pending) => editAll(pending.cards, approvalCard(pending, cardSettings())),
   closeCards: (pending, outcome) => editAll(pending.cards, resolvedCard(pending, outcome, cardSettings())),
   allOpen: async (pending) => (await Promise.all(pending.cards.map(isOpen))).every(Boolean),

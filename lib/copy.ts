@@ -19,6 +19,9 @@ export const WARNING_TEXT: Record<Warning, string> = {
 
 export const COPY = {
   somethingWrong: 'Something went wrong on my side. Try again in a moment.',
+  /** When an accepted email could not be processed. Only the time and the provider's id, nothing from the email. */
+  unreadEmail: (arrivedAt: Date, emailId: string) =>
+    `An email arrived at ${arrivedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC and could not be read. Check the inbox. (Email id: ${plainText(emailId)})`,
   card: {
     title: (who: string) => `Payment link for ${plainText(who)}`,
     from: 'From',

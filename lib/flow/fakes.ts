@@ -61,6 +61,7 @@ export class FakeChat implements ApprovalChat {
   readonly cards: FakeCard[] = [];
   readonly threadPosts: { card: CardRef; post: ThreadPost }[] = [];
   readonly notices: string[] = [];
+  readonly alerts: { admins: readonly string[]; text: string }[] = [];
   readonly sentButtons = new Map<string, boolean>();
   private nextTs = 1_700_000_000;
 
@@ -91,6 +92,11 @@ export class FakeChat implements ApprovalChat {
     const text = COPY.notice.body(customer.name ?? customer.email, subject, note);
     this.notices.push(text);
     this.print(`[slack] notice to ${admins.length} admin(s): ${text}`);
+  }
+
+  async postAlert(admins: readonly string[], text: string): Promise<void> {
+    this.alerts.push({ admins, text });
+    this.print(`[slack] alert to ${admins.length} admin(s): ${text}`);
   }
 
   private find(ref: CardRef): FakeCard | undefined {

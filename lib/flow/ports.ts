@@ -22,6 +22,8 @@ export interface ApprovalChat {
   postCards(draft: PendingRequest, admins: readonly string[]): Promise<PendingRequest | null>;
   /** Tells admins about an email that is not a payment request. No buttons. */
   postNotice(admins: readonly string[], customer: Customer, subject: string, note: string): Promise<void>;
+  /** Sends admins a short plain message, such as an email that could not be read. No buttons. */
+  postAlert(admins: readonly string[], text: string): Promise<void>;
   /** Re-renders every card with new content and buttons. False if any edit failed. */
   refreshCards(pending: PendingRequest): Promise<boolean>;
   /** Replaces every card with a decided version without buttons. False if any edit failed. */

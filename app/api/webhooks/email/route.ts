@@ -3,9 +3,8 @@ import { config } from '@/lib/config';
 import { MAX_WEBHOOK_BYTES, RateLimiter } from '@/lib/email/guard';
 import { admitWebhook, type IntakeLimits, newIntakeLimits } from '@/lib/email/intake';
 import { resendProvider } from '@/lib/email/resend';
-import { handleEmail } from '@/lib/flow/inbound';
+import { type DeliveryIo, processDelivery } from '@/lib/flow/delivery';
 import { log } from '@/lib/log';
-import { requestIdFor } from '@/lib/requests/pending';
 import { bot, deps } from '@/lib/slack/bot';
 
 // Reading the email, the model and the Slack cards run after the response; give them room.
@@ -45,19 +44,16 @@ export async function POST(request: Request): Promise<Response> {
   if (!admission.delivery) return respond(admission.status, admission.message);
 
   const { emailId } = admission.delivery;
-  const requestId = requestIdFor(emailId);
-  after(async () => {
-    try {
-      const email = await provider.fetchEmail(emailId);
-      if (!perSender?.allow(email.from.address, Date.now())) {
-        log.warn('inbound email rate limited for its sender', { requestId });
-        return;
-      }
+  const arrivedAt = new Date();
+  const io: DeliveryIo = {
+    fetchEmail: provider.fetchEmail,
+    allowSender: (address) => perSender?.allow(address, Date.now()) ?? false,
+    ready: async () => {
       await bot().initialize();
-      log.info('inbound email handled', { requestId, outcome: await handleEmail(email, deps()) });
-    } catch (error: unknown) {
-      log.error('failed to handle an inbound email', { requestId, error });
-    }
-  });
+      return deps();
+    },
+  };
+  // Failures are logged and reported to the admins inside processDelivery.
+  after(() => processDelivery(emailId, arrivedAt, io));
   return respond(admission.status, admission.message);
 }
