@@ -23,7 +23,8 @@ if (!path) throw new Error('usage: npm run live-link -- <fixture.json> [--as <lo
 const fixture = JSON.parse(await readFile(path, 'utf8'));
 const email = toInboundEmail(fixture.email);
 const understood = understand(email, fixture.modelReading, { maxAmount: config().maxAmount });
-if (understood.kind !== 'payment' || understood.amount === null) throw new Error('this fixture has no amount to approve; use opening-order');
+if (understood.kind !== 'payment' || understood.amount === null)
+  throw new Error('this fixture has no amount to approve; use opening-order');
 
 if (!(await isConnected(subject))) {
   console.info(`The login "${subject}" has not connected Airwallex. Open this link, sign in to your SANDBOX, then run again:`);
@@ -61,7 +62,9 @@ console.info(`   created: ${first.link.url} (id ${first.link.id}, status ${first
 console.info('2. Approve again (a retry or a second admin): the existing link must come back');
 const second = await payments.create(subject, pending, new Date());
 if (!second.ok) throw new Error(`second call failed: ${second.problem}`);
-console.info(`   ${second.reused && second.link.id === first.link.id ? 'reused the same link' : 'PROBLEM: a second link was made'} (${second.link.id})`);
+console.info(
+  `   ${second.reused && second.link.id === first.link.id ? 'reused the same link' : 'PROBLEM: a second link was made'} (${second.link.id})`,
+);
 
 console.info('3. Has it been paid?');
 const created: CreatedLink = {

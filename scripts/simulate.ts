@@ -42,7 +42,11 @@ const body = JSON.stringify({ type: 'email.received', created_at: fixture.email.
 const deliveryId = `msg_${randomUUID()}`;
 const nowMs = Date.now();
 const timestamp = Math.floor(nowMs / 1000);
-const headers = new Headers({ 'svix-id': deliveryId, 'svix-timestamp': String(timestamp), 'svix-signature': sign(secret, deliveryId, timestamp, body) });
+const headers = new Headers({
+  'svix-id': deliveryId,
+  'svix-timestamp': String(timestamp),
+  'svix-signature': sign(secret, deliveryId, timestamp, body),
+});
 const delivery = readResendWebhook(secret, { headers, rawBody: body }, nowMs);
 print(`signature check: ${delivery.kind === 'email' ? 'valid' : delivery.kind}`);
 const forged = readResendWebhook(secret, { headers, rawBody: body.replace(fixture.email.id, 'someone-else') }, nowMs);
@@ -60,7 +64,9 @@ print(`sender checks: SPF ${email.auth.spf}, DKIM ${email.auth.dkim}, DMARC ${em
 
 heading(liveModel ? 'The model reads it (live, through Vercel AI Gateway)' : 'The model reads it (reading recorded from a real run)');
 const reading: Extraction = liveModel
-  ? await modelExtractor({ model: process.env.TILL_MODEL ?? 'openai/gpt-5', reasoningEffort: 'low', companyName: 'Kopi Lane Roasters' })(email)
+  ? await modelExtractor({ model: process.env.TILL_MODEL ?? 'openai/gpt-5', reasoningEffort: 'low', companyName: 'Kopi Lane Roasters' })(
+      email,
+    )
   : fixture.modelReading;
 if (!liveModel) print(fixture.modelReadingSource);
 for (const [key, value] of Object.entries(reading)) print(`${key}: ${JSON.stringify(value)}`);

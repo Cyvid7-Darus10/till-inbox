@@ -160,13 +160,13 @@ Then:
    and copy its signing secret. Create an API key that can read received emails.
 5. Set the variables in Project Settings > Environment Variables, then redeploy:
 
-   | Variable | What it is |
-   | --- | --- |
-   | `TILL_ADMIN_SLACK_IDS` | Slack member ids of the admins who approve, comma-separated, at most 5 |
-   | `RESEND_API_KEY` | Secret. Reads the received email (and sends the reply, if turned on) |
-   | `RESEND_WEBHOOK_SECRET` | Secret. The `whsec_...` signing secret of the Resend webhook |
+   | Variable                    | What it is                                                                   |
+   | --------------------------- | ---------------------------------------------------------------------------- |
+   | `TILL_ADMIN_SLACK_IDS`      | Slack member ids of the admins who approve, comma-separated, at most 5       |
+   | `RESEND_API_KEY`            | Secret. Reads the received email (and sends the reply, if turned on)         |
+   | `RESEND_WEBHOOK_SECRET`     | Secret. The `whsec_...` signing secret of the Resend webhook                 |
    | `TILL_AIRWALLEX_ACCOUNT_ID` | Optional. Which Airwallex account gets the links, if your login sees several |
-   | `TILL_COMPANY_NAME` | Optional. Signs the reply |
+   | `TILL_COMPANY_NAME`         | Optional. Signs the reply                                                    |
 
    `.env.example` lists every setting with its default. The server checks them when it starts and
    refuses to run if one is missing or invalid, naming the variable.
@@ -249,11 +249,11 @@ vercel env pull .env.local   # the OIDC token for Vercel Connect and AI Gateway,
 npm run dev
 ```
 
-| Command | What it does |
-| --- | --- |
-| `npm run check` | Type check, lint, and tests with coverage |
-| `npm run simulate -- <fixture>` | The whole flow with fakes, printed step by step |
-| `npm run read-email -- <fixture>` | The real model on one fixture email. Sends nothing |
+| Command                                                   | What it does                                                                                                    |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `npm run check`                                           | Type check, lint, and tests with coverage                                                                       |
+| `npm run simulate -- <fixture>`                           | The whole flow with fakes, printed step by step                                                                 |
+| `npm run read-email -- <fixture>`                         | The real model on one fixture email. Sends nothing                                                              |
 | `npm run live-link -- fixtures/emails/opening-order.json` | Creates one real payment link in your Airwallex sandbox, asks again to check it is reused, and reads its status |
 
 Vercel Connect saves Airwallex logins per environment, so a login made from your laptop (development)

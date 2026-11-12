@@ -4,9 +4,7 @@
     "id": "4f1c2b8e-0d1a-4b7e-9c11-6a2f0e9b0002",
     "created_at": "2026-11-12T08:40:00.000Z",
     "from": "Leo Park <leo@fitzroypantry.example>",
-    "to": [
-      "orders@kopilane.example"
-    ],
+    "to": ["orders@kopilane.example"],
     "subject": "How do we pay for this month?",
     "message_id": "<monthly-0002@fitzroypantry.example>",
     "text": "Hello,\n\nWe'd like to pay for this month's coffee order, the usual 30 kg of house blend plus the decaf. What's the easiest way to pay? A card link would be great.\n\nCheers,\nLeo Park\nFitzroy Pantry",
