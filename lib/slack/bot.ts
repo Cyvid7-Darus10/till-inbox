@@ -3,7 +3,6 @@ import { createMemoryState } from '@chat-adapter/state-memory';
 import { connectSlackAdapter } from '@vercel/connect/chat';
 import { type ActionEvent, Chat } from 'chat';
 import { after } from 'next/server';
-import { z } from 'zod';
 import { modelExtractor } from '../agent/extract';
 import { airwallexPayments } from '../airwallex/payments';
 import { config, isAdmin } from '../config';
@@ -14,7 +13,8 @@ import type { ApprovalChat, FlowDeps, ThreadPost } from '../flow/ports';
 import { log } from '../log';
 import { channelOf } from '../requests/approval';
 import { decodeCreated } from '../requests/created';
-import { type CardRef, decodePending, type PendingRequest, pendingSchema } from '../requests/pending';
+import { decodeModalContext } from '../requests/modal-context';
+import { type CardRef, decodePending, type PendingRequest } from '../requests/pending';
 import { hasButton, hasButtons } from './card-state';
 import {
   ACTIONS,
@@ -59,7 +59,13 @@ function publicOrigin(): string {
   return `https://${host}`;
 }
 
-const cardSettings = (): CardSettings => ({ companyName: config().companyName, linkExpiryDays: config().linkExpiryDays });
+const cardSettings = (): CardSettings => ({
+  companyName: config().companyName,
+  linkExpiryDays: config().linkExpiryDays,
+  stateSecret: config().stateSecret,
+});
+
+const secret = (): string => config().stateSecret;
 
 // A card is a top-level DM message, so its own timestamp is also its thread.
 const threadOf = (card: CardRef): string => `slack:${card.channel}:${card.messageId}`;
@@ -78,7 +84,7 @@ async function isOpen(card: CardRef): Promise<boolean> {
 
 function render(post: ThreadPost) {
   if (post.kind === 'connect') return connectCard(post.url);
-  if (post.kind === 'created') return createdCard(post.created, post.reply, post.canSendEmail);
+  if (post.kind === 'created') return createdCard(post.created, post.reply, secret(), post.canSendEmail);
   return post.text;
 }
 
@@ -114,7 +120,7 @@ const slackChat: ApprovalChat = {
     return message !== null && hasButton(message.raw, ACTIONS.sendReply);
   },
   async markSent(threadId, messageId, created, reply) {
-    await slack().editMessage(threadId, messageId, createdCard(created, reply, true, true));
+    await slack().editMessage(threadId, messageId, createdCard(created, reply, secret(), true, true));
   },
   async displayName(slackUserId) {
     const profile = await slack().getUser(slackUserId);
@@ -165,34 +171,33 @@ async function guarded(event: ActionEvent, what: string, work: () => Promise<unk
   }
 }
 
-const modalContextSchema = z.object({ pending: pendingSchema, threadId: z.string().max(80), messageId: z.string().max(40) });
-
 /** Wires the buttons and the amount form. Called once by the Slack webhook route. */
 export function registerHandlers(): void {
   const chatBot = bot();
   chatBot.onAction(ACTIONS.approve, (event) =>
-    guarded(event, 'approve', () => approve(decodePending(event.value), clickOf(event), deps())),
+    guarded(event, 'approve', () => approve(decodePending(event.value, secret()), clickOf(event), deps())),
   );
-  chatBot.onAction(ACTIONS.reject, (event) => guarded(event, 'reject', () => reject(decodePending(event.value), clickOf(event), deps())));
+  chatBot.onAction(ACTIONS.reject, (event) =>
+    guarded(event, 'reject', () => reject(decodePending(event.value, secret()), clickOf(event), deps())),
+  );
   chatBot.onAction(ACTIONS.checkPaid, (event) =>
-    guarded(event, 'check paid', () => checkPaid(decodeCreated(event.value), clickOf(event), deps())),
+    guarded(event, 'check paid', () => checkPaid(decodeCreated(event.value, secret()), clickOf(event), deps())),
   );
   chatBot.onAction(ACTIONS.sendReply, (event) =>
-    guarded(event, 'send reply', () => sendReply(decodeCreated(event.value), clickOf(event), deps())),
+    guarded(event, 'send reply', () => sendReply(decodeCreated(event.value, secret()), clickOf(event), deps())),
   );
   chatBot.onAction(ACTIONS.editAmount, (event) =>
     guarded(event, 'edit amount', async () => {
-      const pending = decodePending(event.value);
+      const pending = decodePending(event.value, secret());
       if (!pending || !isAdmin(event.user.userId)) return 'ignored';
-      await event.openModal(amountModal({ pending, threadId: event.threadId, messageId: event.messageId }));
+      await event.openModal(amountModal({ pending, threadId: event.threadId, messageId: event.messageId }, secret()));
       return 'modal opened';
     }),
   );
   chatBot.onModalSubmit(AMOUNT_MODAL, (event) => {
-    let context: z.infer<typeof modalContextSchema> | null = null;
-    try {
-      context = modalContextSchema.parse(JSON.parse(event.privateMetadata ?? ''));
-    } catch {
+    // A bad or missing signature is logged inside decodeModalContext; the form just closes.
+    const context = decodeModalContext(event.privateMetadata, secret());
+    if (!context) {
       log.warn('ignored an amount form with unreadable context', { userId: event.user.userId });
       return;
     }

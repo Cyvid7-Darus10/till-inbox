@@ -3,6 +3,7 @@ import { Actions, Button, Card, type CardElement, CardText, Field, Fields, LinkB
 import { COPY, WARNING_TEXT } from '../copy';
 import { actionsFor } from '../requests/approval';
 import { type CreatedLink, encodeCreated } from '../requests/created';
+import { encodeModalContext, type ModalContext } from '../requests/modal-context';
 import { type CardRef, encodePending, formatAmount, type PendingRequest } from '../requests/pending';
 import { buildReply, type ReplySettings } from '../requests/reply';
 import { WARNINGS } from '../requests/understand';
@@ -22,6 +23,8 @@ export const MODAL_FIELDS = { amount: 'amount', currency: 'currency', purpose: '
 
 export interface CardSettings extends ReplySettings {
   linkExpiryDays: number;
+  /** TILL_STATE_SECRET: signs what the buttons carry. */
+  stateSecret: string;
 }
 
 const asElement = (card: ReturnType<typeof Card>, what: string): CardElement => {
@@ -62,9 +65,9 @@ function RequestFields({ pending, settings }: { pending: PendingRequest; setting
 const warningLines = (pending: PendingRequest): string =>
   pending.warnings.map((warning) => `• ${WARNING_TEXT[warning as keyof typeof WARNING_TEXT]}`).join('\n');
 
-/** Sent to each admin's DM. The buttons carry the whole request; bot.ts checks every click. */
+/** Sent to each admin's DM. The buttons carry the whole request, signed; bot.ts checks every click. */
 export function approvalCard(pending: PendingRequest, settings: CardSettings): CardElement {
-  const value = encodePending(pending);
+  const value = encodePending(pending, settings.stateSecret);
   const actions = actionsFor(pending);
   const ready = pending.amount !== null && pending.currency !== null;
   return asElement(
@@ -127,8 +130,8 @@ export function connectCard(consentUrl: string): CardElement {
 }
 
 /** The created link, the reply to copy, and the follow-up buttons. */
-export function createdCard(created: CreatedLink, reply: string, canSendEmail: boolean, sent = false): CardElement {
-  const value = encodeCreated(created);
+export function createdCard(created: CreatedLink, reply: string, stateSecret: string, canSendEmail: boolean, sent = false): CardElement {
+  const value = encodeCreated(created, stateSecret);
   const url = safeLink(created.link.url);
   return asElement(
     <Card title={formatAmount(created.pending.amount ?? 0, created.pending.currency ?? '')}>
@@ -149,17 +152,11 @@ export function createdCard(created: CreatedLink, reply: string, canSendEmail: b
   );
 }
 
-/** What the amount modal carries between opening and submitting. */
-export interface ModalContext {
-  pending: PendingRequest;
-  threadId: string;
-  messageId: string;
-}
-
-export function amountModal(context: ModalContext) {
+export function amountModal(context: ModalContext, stateSecret: string) {
   const { pending } = context;
+  const metadata = encodeModalContext(context, stateSecret);
   return (
-    <Modal callbackId={AMOUNT_MODAL} title={COPY.modal.title} submitLabel={COPY.modal.submit} privateMetadata={JSON.stringify(context)}>
+    <Modal callbackId={AMOUNT_MODAL} title={COPY.modal.title} submitLabel={COPY.modal.submit} privateMetadata={metadata}>
       <TextInput id={MODAL_FIELDS.amount} label={COPY.modal.amount} initialValue={pending.amount?.toString() ?? ''} maxLength={12} />
       <TextInput id={MODAL_FIELDS.currency} label={COPY.modal.currency} initialValue={pending.currency ?? ''} maxLength={3} />
       <TextInput id={MODAL_FIELDS.purpose} label={COPY.modal.purpose} initialValue={pending.purpose} maxLength={160} />

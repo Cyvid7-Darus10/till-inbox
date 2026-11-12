@@ -1,11 +1,14 @@
 import { z } from 'zod';
+import { log } from '../log';
 import { cleanMessageId } from './clean';
 import { MAX_NOTE_LENGTH, MAX_PURPOSE_LENGTH } from './extraction';
+import { openSigned, type SignedKind, signValue } from './signed';
 import { WARNINGS } from './understand';
 
 /**
  * A payment request waiting for an admin. There is no database: it travels inside the Slack button
- * values and is validated again every time it comes back, so a tampered button is just ignored.
+ * values, signed with TILL_STATE_SECRET (signed.ts), and its signature and shape are checked again
+ * every time it comes back, so a tampered or forged button is just ignored.
  */
 
 /** Slack refuses a button value longer than this. */
@@ -53,24 +56,36 @@ export const pendingSchema = z.object({
 
 export type PendingRequest = z.infer<typeof pendingSchema>;
 
-/** Slack returns button values exactly as posted. JSON keeps them short enough. */
-export const encodePending = (pending: PendingRequest): string => JSON.stringify(pending);
+/** Slack returns button values exactly as posted. Signed JSON keeps them short enough. */
+export const encodePending = (pending: PendingRequest, secret: string): string => signValue('pending', JSON.stringify(pending), secret);
 
-export function decodePending(value: string | undefined): PendingRequest | null {
-  if (!value || value.length > MAX_BUTTON_VALUE_LENGTH) return null;
+/**
+ * Reads back a value made by `encodePending`, checking its signature first. Null for anything
+ * else; a value with a bad or missing signature is also logged, since only a forger makes one.
+ */
+export function decodeSigned<T>(
+  kind: SignedKind,
+  value: string | undefined,
+  secret: string,
+  schema: z.ZodType<T>,
+  maxLength: number,
+): T | null {
+  if (!value || value.length > maxLength) return null;
+  const payload = openSigned(kind, value, secret);
+  if (payload === null) {
+    log.warn('refused a Slack value without a valid signature', { kind });
+    return null;
+  }
   try {
-    const parsed = pendingSchema.safeParse(JSON.parse(value));
+    const parsed = schema.safeParse(JSON.parse(payload));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
 }
 
-/** Whether the request still fits in a button once a card is listed for each approver. */
-export function fitsInButton(draft: PendingRequest, approvers: number): boolean {
-  const longest: CardRef = { channel: 'D'.repeat(20), messageId: `${'9'.repeat(12)}.${'9'.repeat(8)}` };
-  return encodePending({ ...draft, cards: Array.from({ length: approvers }, () => longest) }).length <= MAX_BUTTON_VALUE_LENGTH;
-}
+export const decodePending = (value: string | undefined, secret: string): PendingRequest | null =>
+  decodeSigned('pending', value, secret, pendingSchema, MAX_BUTTON_VALUE_LENGTH);
 
 /** One request per email: the provider's email id, made safe for an Airwallex reference. */
 export const requestIdFor = (emailId: string): string => `till-inbox-${emailId.replace(/[^\w.-]/g, '')}`.slice(0, 64);

@@ -21,3 +21,21 @@ export const pendingFixture = (overrides: Partial<PendingRequest> = {}): Pending
   ],
   ...overrides,
 });
+
+/**
+ * A request with every field at its longest, as cleaned email text can make it, and `approvers`
+ * cards with the longest Slack ids. Used to check the signed values still fit Slack's limits.
+ */
+export const largestPending = (approvers: number): PendingRequest =>
+  pendingFixture({
+    requestId: `till-inbox-${'e'.repeat(53)}`,
+    messageId: `<${'m'.repeat(98)}@${'d'.repeat(99)}>`,
+    subject: 's'.repeat(120),
+    customer: { name: 'n'.repeat(120), company: 'c'.repeat(120), email: `${'a'.repeat(64)}@${'b'.repeat(60)}.example` },
+    purpose: 'p'.repeat(160),
+    note: 'o'.repeat(200),
+    dueDate: '2026-12-31',
+    warnings: ['amount-not-in-email', 'instructions-in-email', 'sender-not-verified', 'email-clipped', 'low-confidence'],
+    mentioned: Array.from({ length: 10 }, () => 'AUD 1,000,000.00'),
+    cards: Array.from({ length: approvers }, () => ({ channel: 'D'.repeat(20), messageId: `${'9'.repeat(12)}.${'9'.repeat(8)}` })),
+  });

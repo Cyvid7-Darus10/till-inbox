@@ -6,8 +6,9 @@ import { SLACK_USER_ID } from './slack/user-id';
  * Every setting Till Inbox uses, validated once at startup. The server refuses to start if one is
  * missing or invalid, and the error names the variable.
  *
- * Two values are secrets, both from the email provider: RESEND_API_KEY and RESEND_WEBHOOK_SECRET.
- * Slack and Airwallex need none: Vercel Connect holds those logins.
+ * Three values are secrets: RESEND_API_KEY and RESEND_WEBHOOK_SECRET from the email provider, and
+ * TILL_STATE_SECRET, which signs what the Slack buttons carry. Slack and Airwallex need none:
+ * Vercel Connect holds those logins.
  */
 
 const commaList = (value: string): string[] =>
@@ -20,6 +21,9 @@ const flag = z
   .enum(['true', 'false'])
   .default('false')
   .transform((value) => value === 'true');
+
+/** Shortest TILL_STATE_SECRET accepted. `openssl rand -base64 32` gives 44 characters. */
+const MIN_STATE_SECRET_LENGTH = 32;
 
 const schema = z
   .object({
@@ -64,6 +68,10 @@ const schema = z
     resendWebhookSecret: z
       .string({ error: 'required (the Resend webhook signing secret, whsec_...)' })
       .regex(/^whsec_[A-Za-z0-9+/=]{16,}$/, 'not a webhook signing secret (whsec_...)'),
+    /** Signs the request each Slack button and form carries, so a forged click is refused. Secret. */
+    stateSecret: z
+      .string({ error: 'required (a random secret: openssl rand -base64 32)' })
+      .min(MIN_STATE_SECRET_LENGTH, `at least ${MIN_STATE_SECRET_LENGTH} characters (openssl rand -base64 32)`),
     /** Off by default. When on, an admin can press "Send reply" to email the customer. */
     sendReplyEmail: flag,
     /** The From address for reply emails, on a domain verified in Resend. Required when sending is on. */
@@ -94,6 +102,7 @@ const ENV_NAMES: Record<keyof Config, string> = {
   maxAmount: 'TILL_MAX_AMOUNT',
   resendApiKey: 'RESEND_API_KEY',
   resendWebhookSecret: 'RESEND_WEBHOOK_SECRET',
+  stateSecret: 'TILL_STATE_SECRET',
   sendReplyEmail: 'TILL_SEND_REPLY_EMAIL',
   replyFrom: 'TILL_REPLY_FROM',
   inboundPerMinute: 'TILL_INBOUND_PER_MINUTE',

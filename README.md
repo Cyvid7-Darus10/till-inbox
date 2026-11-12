@@ -133,6 +133,7 @@ account. Resend's `<id>.resend.app` receiving address means you don't need your 
    | `TILL_ADMIN_SLACK_IDS`      | Slack member ids of the admins who approve, comma-separated, at most 5       |
    | `RESEND_API_KEY`            | Secret. Reads the received email (and sends the reply, if turned on)         |
    | `RESEND_WEBHOOK_SECRET`     | Secret. The `whsec_...` signing secret of the Resend webhook                 |
+   | `TILL_STATE_SECRET`         | Secret. Signs what the Slack buttons carry. `openssl rand -base64 32`        |
    | `TILL_AIRWALLEX_ACCOUNT_ID` | Optional. Which Airwallex account gets the links, if your login sees several |
    | `TILL_COMPANY_NAME`         | Optional. Signs the reply                                                    |
 

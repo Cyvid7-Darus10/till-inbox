@@ -16,6 +16,7 @@ jobs:
       TILL_ADMIN_SLACK_IDS: UADMIN0001
       RESEND_API_KEY: re_placeholder_for_ci
       RESEND_WEBHOOK_SECRET: whsec_cGxhY2Vob2xkZXIgZm9yIGNp
+      TILL_STATE_SECRET: placeholder-state-secret-for-ci-not-real
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

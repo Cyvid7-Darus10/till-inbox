@@ -55,8 +55,10 @@ the amount. Remaining edge cases are not chased in code: anything unclear is typ
 
 ## Only admins decide, once
 
-`TILL_ADMIN_SLACK_IDS` lists who may press anything. Each card's buttons carry the request, and every
-click is validated again (`lib/requests/approval.ts`): the clicker must be an admin, the button must
+`TILL_ADMIN_SLACK_IDS` lists who may press anything. Each card's buttons carry the request, signed
+with `TILL_STATE_SECRET` (HMAC-SHA256, `lib/requests/signed.ts`), and so do the buttons under a link
+and the amount form. A click whose value has a missing or wrong signature is logged and ignored.
+Every click is then validated again (`lib/requests/approval.ts`): the clicker must be an admin, the button must
 belong to a card posted for this request (or, for the buttons under a link, to the DM where it was
 approved), and the action must be one that card offers. Approve and Reject replace every card with a
 version without buttons, so the first decision wins and later clicks do nothing.
@@ -104,13 +106,16 @@ What the code protects against:
 
 What stays your responsibility as the deployer:
 
-- Who can change the Vercel project. Anyone who can edit its settings can change the admin list, and
-  anyone who can pull its environment (`vercel env pull`) holds an OIDC token that the Slack route
-  accepts, so they could forge a click as an admin.
+- Who can change the Vercel project. Anyone who can edit its settings can change the admin list or
+  the state secret. The Slack route accepts any Vercel OIDC token for the project, so someone who
+  holds such a token and also knows `TILL_STATE_SECRET` could still forge a click as an admin. Mark
+  the secret as Sensitive and use a different value in each environment.
 - A shared store and a firewall rule for heavier use: the replay cache, rate limits and click lock
   are per server instance (see [Limits](../README.md#limits)). Add a Vercel Firewall rate limit rule
   on `/api/webhooks/email`.
-- Keeping `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET` secret, and rotating them if they leak.
+- Keeping `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` and `TILL_STATE_SECRET` secret, and rotating
+  them if they leak. Rotating `TILL_STATE_SECRET` makes the buttons on cards already posted stop
+  working; those requests need a new email.
 - Reading the card. A wrong amount that the email itself states, or a lookalike company name, still
   needs a person to notice.
 

@@ -27,6 +27,12 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 - Anyone who is not a listed admin approving, rejecting, setting an amount, checking a status or
   sending a reply.
 - A button being reused on another message, or an Approve smuggled onto a card with no amount.
+- A forged click changing the request. Every button value and the amount form carry the request
+  signed with `TILL_STATE_SECRET` (HMAC-SHA256 over the exact JSON, checked in constant time before
+  it is read). Before this signature, anyone holding a Vercel OIDC token for the project could post a
+  click with a request of their own making: any amount up to the limit, any purpose and any customer
+  address, approved in one click as an admin. Now a value without a valid signature is logged and
+  ignored, so a forged click can only carry a request the app itself put on a card.
 - Two payment links for one email, from a double click, a Slack retry, or a second admin. Within one
   server instance this is locked; across instances it relies on the cards closing first and on the
   reference lookup, which can miss in a narrow race (see "What it does not prevent").
@@ -43,6 +49,10 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 - An amount that is wrong but stated in the email. Read the email and the card before approving.
 - Replays, rate limits and the click lock across server instances: they live in memory, per
   instance. Two approvals on different instances in the same second could both create a link.
-- Forged Slack clicks by someone who can pull the project's environment: Vercel Connect forwards
-  Slack's requests signed with the project's OIDC token, which `vercel env pull` also hands out.
+- Forged Slack clicks by someone who holds both a Vercel OIDC token for the project and
+  `TILL_STATE_SECRET`. Vercel Connect forwards Slack's requests with the project's OIDC token, and
+  the route accepts any such token for the project and environment. With the state secret as well,
+  a forger can make any request look like one the app signed. Without it, a forger with a token can
+  still replay a real card's signed value and claim to be an admin, so they could approve or reject
+  a request exactly as it was put on a card. Keep the secret Sensitive and different per environment.
 - The admin lists itself: anyone who can change the Vercel project's settings can change who approves.

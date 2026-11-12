@@ -22,6 +22,9 @@ lib/requests/     The payment request
   amount.ts         Reads the amount and currency from the email with one strict grammar
   pending.ts        A request waiting for approval, carried in the buttons
   created.ts        A created link, carried in the buttons under it
+  modal-context.ts  What the amount form carries between opening and submitting
+  signed.ts         Signs and checks everything the buttons and the form carry
+  fits.ts           Whether a request fits in Slack's limits everywhere it travels
   approval.ts       The approval state machine and who may press what
   reply.ts          The reply to the customer, written by code
   link-params.ts    The exact create_payment_link arguments
@@ -55,8 +58,8 @@ fixtures/emails/  The four example emails, with the model readings recorded from
 docs/             The demo recording and these notes
 ```
 
-Till Inbox keeps no database. A pending request travels inside the Slack buttons and is validated
-again every time it comes back.
+Till Inbox keeps no database. A pending request travels inside the Slack buttons, signed with
+`TILL_STATE_SECRET`, and its signature and contents are checked again every time it comes back.
 
 ## Adapt it
 

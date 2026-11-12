@@ -1,7 +1,8 @@
 import type { InboundEmail } from '../email/provider';
 import { log } from '../log';
 import { cleanField, cleanMessageId } from '../requests/clean';
-import { fitsInButton, type PendingRequest, requestIdFor } from '../requests/pending';
+import { fitsInButtons } from '../requests/fits';
+import { type PendingRequest, requestIdFor } from '../requests/pending';
 import { understand } from '../requests/understand';
 import type { FlowDeps } from './ports';
 
@@ -41,7 +42,7 @@ export async function handleEmail(email: InboundEmail, deps: FlowDeps): Promise<
   };
   // Warnings are fixed codes, safe to log; they say why a card asks for an amount.
   log.info('payment request read', { requestId, readyToApprove: draft.amount !== null, warnings: draft.warnings });
-  if (!fitsInButton(draft, deps.settings.adminSlackIds.length)) {
+  if (!fitsInButtons(draft, deps.settings.adminSlackIds.length)) {
     log.warn('payment request too long for an approval card', { requestId });
     await deps.chat.postNotice(
       deps.settings.adminSlackIds,

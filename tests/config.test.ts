@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { readConfig } from '../lib/config';
-import { TEST_SECRET } from './fixtures';
+import { STATE_SECRET, TEST_SECRET } from './fixtures';
 
 // Placeholder values in the right shape. None of them is a real key or id.
 const minimal = {
   TILL_ADMIN_SLACK_IDS: 'UADMIN0001, UADMIN0002',
   RESEND_API_KEY: 're_placeholder_not_real',
   RESEND_WEBHOOK_SECRET: TEST_SECRET,
+  TILL_STATE_SECRET: STATE_SECRET,
 };
 
 describe('config', () => {
@@ -24,12 +25,25 @@ describe('config', () => {
   });
 
   it('names every missing variable, and never prints a value', () => {
-    expect(() => readConfig({})).toThrow(/TILL_ADMIN_SLACK_IDS: required.*RESEND_API_KEY: required.*RESEND_WEBHOOK_SECRET: required/);
+    expect(() => readConfig({})).toThrow(
+      /TILL_ADMIN_SLACK_IDS: required.*RESEND_API_KEY: required.*RESEND_WEBHOOK_SECRET: required.*TILL_STATE_SECRET: required/,
+    );
     expect(() => readConfig({ ...minimal, RESEND_API_KEY: 'sk_live_wrong_kind' })).toThrow(/RESEND_API_KEY: not a Resend API key/);
     try {
       readConfig({ ...minimal, RESEND_API_KEY: 'sk_live_wrong_kind' });
     } catch (error) {
       expect(String(error)).not.toContain('sk_live_wrong_kind');
+    }
+  });
+
+  it('requires a state secret long enough to sign Slack buttons, and never prints it', () => {
+    expect(readConfig(minimal).stateSecret).toBe(STATE_SECRET);
+    expect(() => readConfig({ ...minimal, TILL_STATE_SECRET: undefined })).toThrow('TILL_STATE_SECRET: required');
+    expect(() => readConfig({ ...minimal, TILL_STATE_SECRET: 'short-secret-value' })).toThrow('TILL_STATE_SECRET: at least 32 characters');
+    try {
+      readConfig({ ...minimal, TILL_STATE_SECRET: 'short-secret-value' });
+    } catch (error) {
+      expect(String(error)).not.toContain('short-secret-value');
     }
   });
 

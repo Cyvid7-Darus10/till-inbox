@@ -13,4 +13,6 @@ export function loadFixture(name: FixtureName) {
 export const ADMIN = 'UADMIN0001';
 export const OTHER_ADMIN = 'UADMIN0002';
 export const OUTSIDER = 'UOUTSIDE01';
+/** Signs the state carried in Slack buttons in tests. Not a real secret. */
+export const STATE_SECRET = 'a test state secret for slack buttons, not a real one';
 export const TEST_SECRET = `whsec_${Buffer.from('a test signing secret, not a real one').toString('base64')}`;

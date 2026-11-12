@@ -38,7 +38,7 @@ Airwallex account, and real customers.
 1. Create the Resend account and receiving address, the webhook and the API key (step 4 of
    [Set it up](../README.md#set-it-up)).
 2. Create and install the `slack/till-inbox` connector and attach it with triggers (step 2).
-3. Set `TILL_ADMIN_SLACK_IDS`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` and, for a sandbox with
+3. Set `TILL_ADMIN_SLACK_IDS`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `TILL_STATE_SECRET` and, for a sandbox with
    several accounts, `TILL_AIRWALLEX_ACCOUNT_ID`. Then deploy to production. The Airwallex sign-in
    returns to the production URL, which must be public.
 4. Email the receiving address the text of `fixtures/emails/single-amount.json`.
