@@ -86,11 +86,13 @@ the fixture, recorded from a real run. Add `--live-model` to call the model inst
 
 ## Who can do what
 
-| Who | What they can do |
-| --- | --- |
-| The customer | Emails your receiving address. Gets nothing back unless an admin sends the reply. |
-| An admin, listed in `TILL_ADMIN_SLACK_IDS` (at most 5) | Gets each approval card in a DM. Approves, sets or edits the amount, or rejects. Asks "Has it been paid?". Sends the reply, if sending is turned on. Approving uses the admin's own Airwallex login. |
-| Anyone else | Nothing. Cards go only to admins' DMs, and a click from anyone else does nothing. |
+| Who                                          | What they can do                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------------- |
+| The customer                                 | Emails your receiving address. Hears nothing until an admin sends the reply.    |
+| An admin (`TILL_ADMIN_SLACK_IDS`, at most 5) | Approves, edits the amount or rejects, in a DM, with their own Airwallex login. |
+| Anyone else                                  | Nothing. Cards go only to admins' DMs, and other clicks do nothing.             |
+
+An admin can also ask "Has it been paid?" under a link, and send the reply when sending is on.
 
 ## How approval and safety work
 
