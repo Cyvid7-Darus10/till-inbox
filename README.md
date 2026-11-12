@@ -6,67 +6,29 @@ payment link with the admin's own Airwallex login and writes the reply, with the
 to send. Nothing is created before the approval, and nothing goes to the customer unless an admin
 sends it.
 
-```
- customer email ──> webhook (signed) ──> model reads it ──> code checks it
-                                                               │
-                                       Slack DM to each admin: approval card
-                                         (Approve · Edit amount · Reject)
-                                                               │ Approve
-                                       Airwallex payment link, admin's own login
-                                                               │
-                                       reply with the link, in the Slack thread
-                                         (Has it been paid? · Send reply, if turned on)
-```
+> **Disclaimer.** Till Inbox is an open-source sample built on Airwallex. It is not an official
+> Airwallex product and is not supported by Airwallex. It is provided as is, without warranty, under
+> the Apache License 2.0. It runs against the Airwallex sandbox by default and has not yet been run
+> end to end with a real inbox and a real Slack workspace. Read the full [Disclaimer](#disclaimer)
+> before you use it with real customers or a live Airwallex account.
+
+![A terminal runs npm run simulate on a sample email. The signed webhook is checked, the model's reading is checked, an approval card goes to two admins, a click from someone who is not an admin is ignored, Approve creates one payment link and a reply, and an email with injected instructions gets no one-click Approve.](docs/demo.gif)
+
+A simulated run on a sample email, using stand-ins for Slack and Airwallex. Recorded 13 November
+2026. A recording of a real run will replace this after the first end-to-end run.
+[Watch it as a video](docs/demo.mp4).
 
 Till Inbox is the email version of [Till](https://github.com/Cyvid7-Darus10/till) and
 [Till in DMs](https://github.com/Cyvid7-Darus10/till-dm). Like them, it reaches Airwallex through the
 Airwallex MCP server, and [Vercel Connect](https://vercel.com/docs/connect) holds the Slack and
 Airwallex logins, so the project stores no Slack or Airwallex keys. The email provider is the one
-exception: it needs an API key and a webhook secret. This is a sample app, not an Airwallex product.
-
-> **What is real (checked 2026-11-12)**
->
-> Run for real:
-> - The model step: `openai/gpt-5` through Vercel AI Gateway read the three example emails in
->   `fixtures/emails/`. It read AUD 950 from the clear one, no amount from the one without, and
->   flagged the injection attempt (`npm run read-email`). Those readings are saved in the fixtures.
-> - The Airwallex step: the app's own approval code created one payment link in an Airwallex
->   sandbox through Vercel Connect, with a per-login grant and no API key. Calling it again for the
->   same request returned the same link instead of a second one, and the status read back as unpaid
->   (`npm run live-link`). The tool names and arguments were checked against the sandbox MCP server.
->
-> - The inbound webhook on a Vercel preview deployment: an unsigned request and one with a bad
->   signature got 401, a signed event of another type got 200 and was ignored, and a signed
->   `email.received` got 200 and then tried to fetch the email from Resend (with a placeholder key,
->   so Resend refused it and the app logged only the status).
->
-> Run only against fakes:
-> - Receiving a real email from Resend, the Slack cards, buttons and amount form, and sending a
->   reply. `npm run simulate` runs that whole flow with fakes, and the tests cover it, but it has
->   not yet been run with a real inbox and a real Slack workspace. [First real run](#first-real-run)
->   lists what that takes.
-
-## Try it in one command
-
-No accounts needed. This runs the whole flow on an example email, with fakes for Slack, Airwallex
-and the email provider, and prints each step:
-
-```bash
-npm install
-npm run simulate -- fixtures/emails/opening-order.json   # a café asks to pay AUD 950
-npm run simulate -- fixtures/emails/no-amount.json       # no amount: an admin has to set one
-npm run simulate -- fixtures/emails/injection.json       # the email tries to rewrite the amount and the recipient
-```
-
-The model's reading comes from the fixture, recorded from a real run. Add `--live-model` to call the
-model instead (needs `vercel env pull`, see [Develop](#develop)).
-
-## What an admin sees
+exception: it needs an API key and a webhook secret.
 
 ```
 DM: Alex and Till Inbox
   Till Inbox  [Payment link for Harbour Lane Café Pty Ltd]
               From: Mia Tran, Harbour Lane Café Pty Ltd, accounts@harbourlanecafe.example
+              Sender check: Passed DMARC
               For: 25 kg of the Lane House Blend · Amount: AUD 950.00 · Link expires: 7 days after approval
               Draft reply (nothing is sent until you choose to)
               > Hi Mia, ... You can pay AUD 950.00 for 25 kg of the Lane House Blend here: [payment link]
@@ -78,6 +40,57 @@ DM: Alex and Till Inbox
               > Hi Mia, ... https://pay.sandbox.airwallex.com/...
               (Open payment link) (Has it been paid?)
 ```
+
+> **What is real (checked 2026-11-12, re-checked 2026-11-13)**
+>
+> Run for real on 12 November:
+> - The model step: `openai/gpt-5` through Vercel AI Gateway read the three example emails in
+>   `fixtures/emails/`. It read AUD 950 from the clear one, no amount from the one without, and
+>   flagged the injection attempt (`npm run read-email`). Those readings are saved in the fixtures.
+> - The Airwallex step: the app's own approval code created one payment link in an Airwallex
+>   sandbox through Vercel Connect, with a per-login grant and no API key. Calling it again for the
+>   same request returned the same link instead of a second one, and the status read back as unpaid
+>   (`npm run live-link`). The tool names and arguments were checked against the sandbox MCP server.
+> - The inbound webhook on a Vercel preview deployment: an unsigned request and one with a bad
+>   signature got 401, a signed event of another type got 200 and was ignored, and a signed
+>   `email.received` got 200 and then tried to fetch the email from Resend (with a placeholder key,
+>   so Resend refused it and the app logged only the status).
+>
+> Run only against stand-ins:
+> - Receiving a real email from Resend, the Slack cards, buttons and amount form, and sending a
+>   reply. `npm run simulate` runs that whole flow with stand-ins, and the tests cover it, but it has
+>   not yet been run with a real inbox and a real Slack workspace. [First real run](#first-real-run)
+>   lists what that takes. The demo above is that simulation.
+>
+> Re-checked on 13 November: the tests, type check and lint pass, `npm run simulate` gives the
+> results above on all three emails, and the preview's logs show the unsigned, bad-signature and
+> signed `email.received` results (an ignored event leaves no log line). The model and sandbox runs
+> were not repeated. The amount check was made stricter on 13 November (see "The email
+> is untrusted input" below), after those runs.
+
+## Try it without any accounts
+
+This runs the whole flow on an example email, with stand-ins for Slack, Airwallex and the email
+provider, and prints each step:
+
+```bash
+npm install
+npm run simulate -- fixtures/emails/opening-order.json   # a café asks to pay AUD 950
+npm run simulate -- fixtures/emails/no-amount.json       # no amount: an admin has to set one
+npm run simulate -- fixtures/emails/injection.json       # the email tries to rewrite the amount and the recipient
+```
+
+Add `--step` to go one step at a time, pressing Enter between steps. The model's reading comes from
+the fixture, recorded from a real run. Add `--live-model` to call the model instead (needs
+`vercel env pull`, see [Develop](#develop)).
+
+## Who can do what
+
+| Who | What they can do |
+| --- | --- |
+| The customer | Emails your receiving address. Gets nothing back unless an admin sends the reply. |
+| An admin, listed in `TILL_ADMIN_SLACK_IDS` (at most 5) | Gets each approval card in a DM. Approves, sets or edits the amount, or rejects. Asks "Has it been paid?". Sends the reply, if sending is turned on. Approving uses the admin's own Airwallex login. |
+| Anyone else | Nothing. Cards go only to admins' DMs, and a click from anyone else does nothing. |
 
 ## How approval and safety work
 
@@ -115,10 +128,17 @@ doesn't email the customer either.
   and the body is capped at 64 KB.
 - The model gets the email as JSON data, with no tools at all. It can only fill in a fixed schema
   (`lib/requests/extraction.ts`).
-- Code checks the model (`lib/requests/understand.ts`). The amount is kept only if the model quotes
-  the words that state it, the quote appears in the email, and the number is in the quote. A total
-  the model worked out (25 kg at AUD 38) is dropped. A bare "$" is not a currency. Amounts above
-  `TILL_MAX_AMOUNT` are dropped. Without an amount, the card has no Approve button, only "Set amount".
+- Code reads the amount again (`lib/requests/amount.ts`). The model's quote only says where to look.
+  The code normalizes the email once (every kind of dash and space made plain, invisible characters
+  removed) and reads the amount at that place with one strict grammar: an optional currency code or
+  symbol, a plain number with correct thousands commas and at most two decimals, standing apart
+  from letters, other digits and joining marks. The quote must touch exactly one such amount, and
+  its amount and currency must agree with the model's. Anything else gets no amount, never a best
+  guess: a total the model worked out (25 kg at AUD 38), a negative, a range or a choice of amounts,
+  an invoice number, a date or a phone number, other ways of writing numbers (1.250,00, 12,50,
+  1'250), digits from other scripts, a currency that is not written next to the amount, and a bare
+  "$". Amounts above `TILL_MAX_AMOUNT` are dropped too. Without an amount, the card has no Approve
+  button, only "Set amount" and "Reject", and an admin types the amount.
 - An email that tries to instruct an assistant ("ignore previous instructions", "the correct amount
   is...") is flagged, by the model and by a separate check in code, and gets no one-click Approve:
   an admin types the amount in by hand.
@@ -156,6 +176,8 @@ What the code protects against, in plain words:
   zero-width and direction characters), then anything that looks like a URL, an email address or a
   hostname with any top-level domain, punycode included, is removed, and only letters, digits,
   spaces and common punctuation are kept. So no link, mention or Slack formatting gets through.
+- **A wrong amount slipped past the check.** The amount and currency on the card are read from the
+  email by code with one strict grammar, as described above, and must agree with the model.
 - **Header injection.** The reply's subject is fixed text, the recipient is a validated address,
   and the original Message-ID is used for threading only if it is a single well-formed line.
 - **Personal data in logs.** Logs carry ids, counts and fixed codes. Fields whose names suggest
@@ -178,15 +200,75 @@ What stays your responsibility as the deployer:
 
 To report a security problem, see [SECURITY.md](SECURITY.md).
 
+## Code tour
+
+```
+app/api/webhooks/email/       Inbound email: size cap, rate limit, signature, replay check
+app/api/webhooks/slack/       Slack button clicks and the amount form, verified by Vercel Connect
+app/api/airwallex/connected/  The page the Airwallex sign-in returns to
+
+lib/email/        The email provider
+  provider.ts       The interface and the email DTO; another provider is one file
+  resend.ts         Resend: read the webhook, fetch the email, send a reply
+  signature.ts      Webhook signature check (the Svix scheme Resend uses)
+  intake.ts         The order of checks on each webhook request
+  guard.ts          Replay cache, rate limits, size caps
+
+lib/agent/        The model
+  extract.ts        Reads one email into the schema, with no tools
+  instructions.ts   What it is told
+
+lib/requests/     The payment request
+  extraction.ts     What the model may report
+  understand.ts     Checks the model: injection, sender checks, the amount
+  amount.ts         Reads the amount and currency from the email with one strict grammar
+  pending.ts        A request waiting for approval, carried in the buttons
+  created.ts        A created link, carried in the buttons under it
+  approval.ts       The approval state machine and who may press what
+  reply.ts          The reply to the customer, written by code
+  link-params.ts    The exact create_payment_link arguments
+  clean.ts          Strips links and markup from email text
+
+lib/airwallex/    Access to Airwallex
+  tool-policy.ts    Scopes, the three tools, sandbox only
+  session.ts        Opens the MCP server as one admin through Vercel Connect
+  payment-links.ts  Create or reuse a link, read its status
+  payments.ts       Puts those together for the flow
+
+lib/flow/         The steps, independent of Slack
+  inbound.ts        Email in: read, check, send approval cards
+  decisions.ts      Approve, reject, set amount, has it been paid, send reply
+  ports.ts          What the flow needs from Slack, Airwallex, the model and email
+  fakes.ts          In-memory stand-ins for those, for tests and the simulation
+
+lib/slack/        Slack, through the Chat SDK
+  bot.ts            Wires the flow to Slack and the buttons to the flow
+  cards.tsx         Approval cards, the amount form, the link message
+  card-state.ts     Tells whether a card still shows its buttons
+  events.ts         Drops Slack's retries
+  text.ts           Keeps names and email text from acting as Slack markup
+
+lib/config.ts     Every setting, validated at startup
+lib/copy.ts       Every sentence the app says
+lib/log.ts        One JSON line per log entry, with personal data redacted
+
+scripts/          simulate.ts, read-email.ts and live-link.ts (see Develop)
+fixtures/emails/  The three example emails, with the model readings recorded from a real run
+docs/             The demo recording
+```
+
+Till Inbox keeps no database. A pending request travels inside the Slack buttons and is validated
+again every time it comes back.
+
 ## Set it up
 
-About ten minutes if you already have the accounts. You need:
+You need:
 
 - A Vercel team with Vercel Connect (Vercel AI Gateway is used for the model).
 - A Slack workspace where you can install apps.
 - An Airwallex sandbox account.
-- A [Resend](https://resend.com) account. It gives each account a receiving address like
-  `anything@<id>.resend.app`, so you don't need your own domain to try it. Check Resend's pricing
+- A [Resend](https://resend.com) account. Resend gives each account a receiving address on its own
+  `<id>.resend.app` subdomain, so you don't need your own domain to try it. Check Resend's pricing
   page for what your plan includes.
 
 Then:
@@ -232,56 +314,6 @@ What was not yet run for real, and how to finish it:
    one link appears in Airwallex under Payments > Payment links. Press "Has it been paid?".
 6. Try `fixtures/emails/no-amount.json` with "Set amount", which also exercises the Slack form.
 
-## Code tour
-
-```
-app/api/webhooks/email/       Inbound email: size cap, rate limit, signature, replay check
-app/api/webhooks/slack/       Slack button clicks and the amount form, verified by Vercel Connect
-app/api/airwallex/connected/  The page the Airwallex sign-in returns to
-
-lib/email/        The email provider
-  provider.ts       The interface and the email DTO; another provider is one file
-  resend.ts         Resend: read the webhook, fetch the email, send a reply
-  signature.ts      Webhook signature check (the Svix scheme Resend uses)
-  guard.ts          Replay cache, rate limits, size caps
-
-lib/agent/        The model
-  extract.ts        Reads one email into the schema, with no tools
-  instructions.ts   What it is told
-
-lib/requests/     The payment request
-  extraction.ts     What the model may report
-  understand.ts     Checks the model: amount evidence, injection, sender checks
-  pending.ts        A request waiting for approval, carried in the buttons
-  approval.ts       The approval state machine and who may press what
-  reply.ts          The reply to the customer, written by code
-  link-params.ts    The exact create_payment_link arguments
-  clean.ts          Strips links and markup from email text
-
-lib/airwallex/    Access to Airwallex
-  tool-policy.ts    Scopes, the three tools, sandbox only
-  session.ts        Opens the MCP server as one admin through Vercel Connect
-  payment-links.ts  Create or reuse a link, read its status
-  payments.ts       Puts those together for the flow
-
-lib/flow/         The steps, independent of Slack
-  inbound.ts        Email in: read, check, send approval cards
-  decisions.ts      Approve, reject, set amount, has it been paid, send reply
-  ports.ts          What the flow needs from Slack, Airwallex, the model and email
-  fakes.ts          In-memory versions of those, for tests and the simulation
-
-lib/slack/        Slack, through the Chat SDK
-  bot.ts            Wires the flow to Slack and the buttons to the flow
-  cards.tsx         Approval cards, the amount form, the link message
-
-lib/config.ts     Every setting, validated at startup
-lib/copy.ts       Every sentence the app says
-lib/log.ts        One JSON line per log entry, with personal data redacted
-```
-
-Till Inbox keeps no database. A pending request travels inside the Slack buttons and is validated
-again every time it comes back.
-
 ## Develop
 
 ```bash
@@ -294,7 +326,7 @@ npm run dev
 | Command                                                   | What it does                                                                                                    |
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `npm run check`                                           | Type check, lint, and tests with coverage                                                                       |
-| `npm run simulate -- <fixture>`                           | The whole flow with fakes, printed step by step                                                                 |
+| `npm run simulate -- <fixture>`                           | The whole flow with stand-ins, printed step by step. Add `--step` to pause between steps                        |
 | `npm run read-email -- <fixture>`                         | The real model on one fixture email. Sends nothing                                                              |
 | `npm run live-link -- fixtures/emails/opening-order.json` | Creates one real payment link in your Airwallex sandbox, asks again to check it is reused, and reads its status |
 
@@ -323,19 +355,40 @@ does not exist in production.
   reach Airwallex before either sees the other's link. Add a shared store such as Redis, and a
   [Vercel Firewall](https://vercel.com/docs/vercel-firewall) rate limit rule on
   `/api/webhooks/email`, before heavy use.
+- If Airwallex returns a link that doesn't match the approval, the app says "Don't send it" but
+  cannot deactivate the link (it has no tool for that). Deactivate it in Airwallex.
+- The check for an existing link reads at most 200 links created since the email arrived.
 - The email is read after the webhook answers. If that fails, the error is logged and the provider
   does not retry.
 - Only the first 8,000 characters of an email are read, and the card says when it was cut.
-- Amounts in other number formats (1.520,00) are not recognised; the admin sets them by hand.
+- The amount check refuses rather than guesses, so some honest emails will need an admin to type
+  the amount: other number formats (1.250,00), amounts written as words, a currency named only
+  elsewhere in the email, or a quote the model copied with a mistake.
 - One link per email. A reply in the same thread is a new email and a new card.
 - At most five admins, because every card's buttons list every card.
-- Resend documents an `authentication` field for sender checks, but not its exact shape; if it
-  changes, the card shows "unknown" for those checks.
+- Resend's sender check results other than pass, fail and none (for example "gray") count as not
+  verified.
 - The amount quote may come from anywhere in the email, including an older message quoted below
   the new one. The card shows the amount; check it against the latest message.
 - If two admins edit the amount at the same moment, the last one wins.
 - A failed "Send reply" removes the button anyway; copy the reply from the thread instead.
 - The model can be wrong. Read the email and the card before you press Approve.
+
+## Disclaimer
+
+- Till Inbox is an open-source sample built on Airwallex. It is not an official Airwallex product,
+  and Airwallex does not support it.
+- It is provided as is, without warranty of any kind, under the Apache License 2.0. See sections 7
+  and 8 of the [LICENSE](LICENSE).
+- It runs against the Airwallex sandbox by default. It has not been run end to end with a real
+  inbox and a real Slack workspace. The "What is real" box above says which parts have been run,
+  and when.
+- It reads email from anyone on the internet and creates payment links. If you deploy it, you are
+  responsible for your own review, security, compliance, data-protection obligations and testing
+  before you use it with real customers or a production Airwallex account.
+- Nothing in it is financial, legal or compliance advice.
+- Airwallex, Slack, Vercel, Resend, OpenAI and other names are trademarks of their owners. They are
+  used only to describe what this sample connects to.
 
 ## License
 

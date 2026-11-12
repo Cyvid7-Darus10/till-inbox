@@ -1,5 +1,10 @@
 # Security
 
+Till Inbox is an open-source sample built on Airwallex. It is not an official Airwallex product and
+is not supported by Airwallex. It is provided as is, without warranty, under the Apache License 2.0.
+It handles untrusted email and creates payment links, so anyone who deploys it is responsible for
+their own review, security, compliance and testing. See the README section "Disclaimer".
+
 ## Reporting a problem
 
 Report security problems privately through GitHub: open the repository's Security tab and choose
@@ -16,7 +21,10 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 - An email changing the amount, the recipient of the reply, or what gets created. The model has no
   tools, the reply goes to the sender of the email, the reply text is written by code, and an email
   that tries to instruct an assistant gets no one-click Approve.
-- An amount the email never stated. The model must quote the words, and code checks the quote.
+- An amount the email never stated. The model's quote only says where to look; code reads the
+  amount and currency from the email at that place with one strict grammar, and anything it does
+  not read cleanly (negatives, ranges, ids, other number formats, digits from other scripts) goes to
+  an admin to type in.
 - Anyone who is not a listed admin approving, rejecting, setting an amount, checking a status or
   sending a reply.
 - A button being reused on another message, or an Approve smuggled onto a card with no amount.
