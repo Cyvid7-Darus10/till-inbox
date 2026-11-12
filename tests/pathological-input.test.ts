@@ -42,8 +42,12 @@ describe('reading an amount from hostile text', () => {
 
   it('reads no amount from text longer than the cap, or with too many tokens', () => {
     expect(amountAtQuote('AUD 950', `${repeat('x', MAX_AMOUNT_TEXT_CHARS)} AUD 950`)).toBeNull();
-    expect(amountAtQuote('AUD 950', `${repeat('AUD 1. ', MAX_AMOUNT_TOKENS)}AUD 950`)).toBeNull();
-    expect(amountAtQuote('AUD 950', `${repeat('AUD 1. ', MAX_AMOUNT_TOKENS - 2)}AUD 950`)).toMatchObject({ value: 950 });
+    expect(
+      amountAtQuote('AUD 950', `${repeat('Box 7 shipped today. ', MAX_AMOUNT_TOKENS)}Please pay the amount of AUD 950 now.`),
+    ).toBeNull();
+    expect(
+      amountAtQuote('AUD 950', `${repeat('Box 7 shipped today. ', MAX_AMOUNT_TOKENS - 1)}Please pay the amount of AUD 950 now.`),
+    ).toMatchObject({ value: 950 });
   });
 });
 

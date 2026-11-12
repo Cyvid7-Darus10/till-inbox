@@ -130,18 +130,11 @@ doesn't email the customer either.
   and the body is capped at 64 KB.
 - The model gets the email as JSON data, with no tools at all. It can only fill in a fixed schema
   (`lib/requests/extraction.ts`).
-- Code reads the amount again (`lib/requests/amount.ts`). The model's quote only says where to look.
-  The code normalizes the email once (every kind of dash and space made plain, invisible characters
-  removed) and reads the amount at that place with one strict grammar: an optional currency code or
-  symbol, a plain number with correct thousands commas and at most two decimals, standing apart
-  from letters, other digits and joining marks. The quote must touch exactly one such amount, and
-  its amount and currency must agree with the model's. Anything else gets no amount, never a best
-  guess: a total the model worked out (25 kg at AUD 38), a negative, a range or a choice of amounts
-  anywhere in the same sentence ("to", "or", "and", "until", a dash or a slash before another number),
-  an invoice number, a date or a phone number, other ways of writing numbers (1.250,00, 12,50,
-  1'250), digits from other scripts, a currency that is not written next to the amount, and a bare
-  "$". Amounts above `TILL_MAX_AMOUNT` are dropped too. Without an amount, the card has no Approve
-  button, only "Set amount" and "Reject", and an admin types the amount.
+- The model's reading is only a pointer: code reads the amount and currency from the email itself
+  with one strict grammar (`lib/requests/amount.ts`), and offers one-click Approve only when that
+  amount is the only one in the email, or is clearly marked as the total, is the largest, matches
+  any quantity times unit price, and has no other number within four words of it. When in doubt,
+  the card has no Approve button, only "Set amount" and "Reject", and an admin types the amount.
 - An email that tries to instruct an assistant ("ignore previous instructions", "the correct amount
   is...") is flagged, by the model and by a separate check in code, and gets no one-click Approve:
   an admin types the amount in by hand.
@@ -185,9 +178,9 @@ What the code protects against, in plain words:
   patterns: the webhook body is capped at 64 KB, HTML at 200,000 characters, the text the model
   and the amount check read at 8,000, a From header at 400 and each cleaned field at 1,000. Every
   limit fails closed: a longer field is dropped rather than cut, a cut email gets no one-click
-  Approve, and an email with more than 200 numbers, a sentence that runs more than 300 characters
-  either side of the amount, or a word over 40 characters near it, has no clear amount.
-  `tests/pathological-input.test.ts` feeds each parser hostile input and checks it finishes quickly.
+  Approve, and an email with more than 200 numbers, or a word over 40 characters next to the
+  amount, has no clear amount. `tests/pathological-input.test.ts` feeds each parser hostile input
+  and checks it finishes quickly.
 - **Header injection.** The reply's subject is fixed text, the recipient is a validated address,
   and the original Message-ID is used for threading only if it is a single well-formed line.
 - **Personal data in logs.** Logs carry ids, counts and fixed codes. Fields whose names suggest
@@ -371,9 +364,9 @@ does not exist in production.
 - The email is read after the webhook answers. If that fails, the error is logged and the provider
   does not retry.
 - Only the first 8,000 characters of an email are read, and the card says when it was cut.
-- The amount check refuses rather than guesses, so some honest emails will need an admin to type
-  the amount: other number formats (1.250,00), amounts written as words, a currency named only
-  elsewhere in the email, or a quote the model copied with a mistake.
+- The amount check refuses rather than guesses, so many honest emails will need an admin to type
+  the amount: several amounts without a clear total, a total with another number close by, other
+  number formats (1.250,00), amounts written as words, or a quote the model copied with a mistake.
 - One link per email. A reply in the same thread is a new email and a new card.
 - At most five admins, because every card's buttons list every card.
 - Resend's sender check results other than pass, fail and none (for example "gray") count as not
