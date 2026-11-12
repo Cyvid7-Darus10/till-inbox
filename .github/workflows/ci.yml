@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # Placeholders so the build can load the config. Not real ids or keys.
+      TILL_ADMIN_SLACK_IDS: UADMIN0001
+      RESEND_API_KEY: re_placeholder_for_ci
+      RESEND_WEBHOOK_SECRET: whsec_cGxhY2Vob2xkZXIgZm9yIGNp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run coverage
+      - run: npm run simulate -- fixtures/emails/opening-order.json
+      - run: npm run build

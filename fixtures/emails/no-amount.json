@@ -1,0 +1,41 @@
+{
+  "description": "No amount: the customer asks how to pay but never says how much.",
+  "email": {
+    "id": "4f1c2b8e-0d1a-4b7e-9c11-6a2f0e9b0002",
+    "created_at": "2026-11-12T08:40:00.000Z",
+    "from": "Leo Park <leo@fitzroypantry.example>",
+    "to": [
+      "orders@kopilane.example"
+    ],
+    "subject": "How do we pay for this month?",
+    "message_id": "<monthly-0002@fitzroypantry.example>",
+    "text": "Hello,\n\nWe'd like to pay for this month's coffee order, the usual 30 kg of house blend plus the decaf. What's the easiest way to pay? A card link would be great.\n\nCheers,\nLeo Park\nFitzroy Pantry",
+    "html": null,
+    "authentication": {
+      "spf": {
+        "result": "pass"
+      },
+      "dkim": {
+        "result": "pass"
+      },
+      "dmarc": {
+        "result": "pass"
+      }
+    }
+  },
+  "modelReading": {
+    "isPaymentRequest": true,
+    "customerName": "Leo Park",
+    "company": "Fitzroy Pantry",
+    "purpose": "this month's coffee order: 30 kg house blend plus decaf",
+    "amount": null,
+    "currency": null,
+    "amountQuote": null,
+    "dueDate": null,
+    "confidence": "high",
+    "note": "They’re asking for a payment method (preferably a card link) but did not state a total.",
+    "containsInstructions": false
+  },
+  "modelReadingSource": "Recorded from openai/gpt-5 through Vercel AI Gateway on 2026-11-12 with npm run read-email.",
+  "adminAmount": "1140 AUD"
+}

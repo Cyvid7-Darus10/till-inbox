@@ -1,0 +1,47 @@
+{
+  "name": "till-inbox",
+  "version": "1.0.0",
+  "description": "Till Inbox: a customer emails asking how to pay, an admin approves in Slack, and an Airwallex payment link goes into the reply. Airwallex logins stay in Vercel Connect.",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "check": "npm run typecheck && npm run lint && npm run coverage",
+    "simulate": "tsx scripts/simulate.ts",
+    "read-email": "tsx --env-file=.env.local scripts/read-email.ts",
+    "live-link": "tsx --env-file=.env.local scripts/live-link.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/mcp": "^1.0.95",
+    "@chat-adapter/slack": "^4.42.0",
+    "@chat-adapter/state-memory": "^4.42.0",
+    "@vercel/connect": "^2.5.2",
+    "ai": "^6.0.307",
+    "chat": "^4.42.0",
+    "next": "^16.4.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "svix": "^1.84.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
