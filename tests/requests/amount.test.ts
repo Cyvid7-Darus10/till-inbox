@@ -117,6 +117,63 @@ describe('anything else is no clear amount, never a best guess', () => {
   });
 });
 
+describe('every limit fails closed', () => {
+  const long = (length: number) => 'x'.repeat(length);
+
+  it.each([
+    ['a long word between the connector and the other number', `Somewhere from AUD 950 to ${long(25)} 1,200 in total.`],
+    ['several words between the connector and the other number', 'Somewhere from AUD 950 to perhaps a bit more like 1,200 in total.'],
+    ['through, till and until', 'From AUD 950 through to 1,200. '],
+    ['between ... and', 'Somewhere between AUD 950 and maybe 1,200 in total.'],
+    ['either ... or', 'Either AUD 950 or, if you prefer, 990.'],
+    ['a standalone dash', 'Pay AUD 950 - or 990.'],
+    ['a standalone slash', 'Pay AUD 950 / 990 per box.'],
+    ['an ampersand', 'Pay AUD 950 & 990 later.'],
+    ['a connector glued to the number', 'Pay AUD 950 to1,200 in total.'],
+    ['a connector before the amount', 'Somewhere from 900 to AUD 950 in total.'],
+    ['a connector across a line break', 'Pay AUD 950\nor 990 tomorrow'],
+  ])('a range or a choice is not clear: %s', (_label, text) => {
+    expect(kept(text, 950, 'AUD', 'AUD 950').amount).toBeNull();
+  });
+
+  it('keeps the amount when the other number is in another sentence', () => {
+    expect(kept('Pay AUD 950 in total. Or call us on 990 if not.', 950, 'AUD', 'AUD 950').amount).toBe(950);
+    expect(kept('Pay AUD 950 in total; and 3 boxes ship Friday.', 950, 'AUD', 'AUD 950').amount).toBe(950);
+    expect(kept('Pay AUD 950 in total\n\nOr call 990 if not', 950, 'AUD', 'AUD 950').amount).toBe(950);
+  });
+
+  it('a 10,000-character run between the connector and the other number is not clear', () => {
+    expect(kept(`Pay AUD 950 to ${long(10_000)} 1,200.`, 950, 'AUD', 'AUD 950').amount).toBeNull();
+    // Under the text cap as well: the word is too long, and the sentence runs past the limit.
+    expect(kept(`Pay AUD 950 to ${long(5_000)} 1,200.`, 950, 'AUD', 'AUD 950').amount).toBeNull();
+    expect(kept(`Pay AUD 950 to ${'word '.repeat(80)}1,200.`, 950, 'AUD', 'AUD 950').amount).toBeNull();
+  });
+
+  it('a sentence that runs past the limit on either side is not clear', () => {
+    const words = 'more words here '.repeat(20);
+    expect(kept(`${words}AUD 950 in total.`, 950, 'AUD', 'AUD 950').amount).toBeNull();
+    expect(kept(`Pay AUD 950 ${words}`, 950, 'AUD', 'AUD 950').amount).toBeNull();
+    expect(kept(`Short. Pay AUD 950 in total. ${words}`, 950, 'AUD', 'AUD 950').amount).toBe(950);
+  });
+
+  it('a word longer than the limit near the amount is not clear', () => {
+    expect(kept(`Pay AUD 950 for ${long(41)} today.`, 950, 'AUD', 'AUD 950').amount).toBeNull();
+    expect(kept(`Pay AUD 950 for ${long(40)} today.`, 950, 'AUD', 'AUD 950').amount).toBe(950);
+  });
+
+  it('text over the length cap, or too many numbers, is not clear', () => {
+    expect(kept(`Pay AUD 950. ${long(8_000)}`, 950, 'AUD', 'AUD 950').amount).toBeNull();
+    expect(kept(`${'AUD 1. '.repeat(200)}Pay AUD 950.`, 950, 'AUD', 'AUD 950').amount).toBeNull();
+    expect(kept(`${'AUD 1. '.repeat(198)}Pay AUD 950.`, 950, 'AUD', 'AUD 950').amount).toBe(950);
+  });
+
+  it('the same quote pointing at two different amounts anywhere in the email is not clear', () => {
+    expect(kept('Pay AUD 950 now. Your last invoice: AUD 950.75 paid.', 950, 'AUD', 'AUD 950').amount).toBeNull();
+    expect(kept('Pay AUD 950 now. Last month was AUD 950 too.', 950, 'AUD', 'AUD 950').amount).toBe(950);
+    expect(kept('Pay AUD 950 now. Or maybe AUD 950 to 1,000.', 950, 'AUD', 'AUD 950').amount).toBeNull();
+  });
+});
+
 describe('random text around a non-amount never makes it an amount', () => {
   // Deterministic, so a failure always reproduces: mulberry32.
   const random = (seed: number) => () => {
@@ -156,14 +213,14 @@ describe('random text around a non-amount never makes it an amount', () => {
 
 describe('the grammar itself', () => {
   it('normalizes dashes, spaces and invisible characters once', () => {
-    expect(normalizeForAmounts('AUD 950–​1,200\n\tnow')).toBe('AUD 950-1,200 now');
+    expect(normalizeForAmounts('AUD\u00A0950\u2013\u200B1,200 \n\tnow  ok\n\n\nnext')).toBe('AUD 950-1,200\nnow ok\n\nnext');
   });
 
-  it('finds each token with its currency, and marks a range as not clear', () => {
+  it('finds each token with its currency, and marks a range or a choice as not clear', () => {
     const text = 'At AUD 38 a kilo, so A$950 in total, or 950 to 990.';
     expect(amountsIn(text).map(({ value, currency }) => [value, currency])).toEqual([
       [38, 'AUD'],
-      [950, 'AUD'],
+      [null, 'AUD'],
       [null, null],
       [null, null],
     ]);

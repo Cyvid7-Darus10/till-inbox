@@ -11,7 +11,7 @@ export const WARNING_TEXT: Record<Warning, string> = {
   'instructions-in-email':
     'This email contains instructions aimed at an assistant. They were ignored, and the amount must be typed in by hand. Read the email itself before you approve.',
   'sender-not-verified': 'The email did not pass DMARC, so it may not come from the address it shows. Check the sender before you approve.',
-  'email-clipped': 'The email was long, so only the start was read.',
+  'email-clipped': 'The email was long, so only the start was read, and the amount must be typed in by hand.',
   'low-confidence': 'The model was not confident reading this email.',
 };
 

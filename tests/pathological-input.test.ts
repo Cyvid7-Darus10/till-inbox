@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { htmlToText, parseAddress } from '../lib/email/provider';
+import { htmlToText, MAX_HTML_CHARS, parseAddress } from '../lib/email/provider';
+import { toInboundEmail } from '../lib/email/resend';
 import { amountAtQuote, MAX_AMOUNT_TEXT_CHARS, MAX_AMOUNT_TOKENS } from '../lib/requests/amount';
 import { cleanField } from '../lib/requests/clean';
-import { looksLikeInstructions } from '../lib/requests/understand';
+import { looksLikeInstructions, understand, WARNINGS } from '../lib/requests/understand';
+import { loadFixture } from './fixtures';
 
 /**
  * Email text is attacker-controlled. Every parser that reads it must finish quickly whatever it is
@@ -28,6 +30,8 @@ describe('reading an amount from hostile text', () => {
     ['long runs without spaces', repeat(`${repeat('9', 30)}x${repeat('-', 30)} to `, 120), 'to'],
     ['only dashes and digits', repeat('9-', 3_999), '9-9'],
     ['every currency code in a row', repeat('AUD USD EUR GBP ', 499), 'AUD'],
+    ['a connector then a 7,000-character word', `AUD 950 to ${repeat('x', 7_000)} 1,200`, 'AUD 950'],
+    ['many short sentences with numbers', repeat('AUD 1. ', 1_100), 'AUD 1'],
   ];
 
   it.each(cases)('finishes quickly with no amount: %s', (_label, text, quote) => {
@@ -38,8 +42,8 @@ describe('reading an amount from hostile text', () => {
 
   it('reads no amount from text longer than the cap, or with too many tokens', () => {
     expect(amountAtQuote('AUD 950', `${repeat('x', MAX_AMOUNT_TEXT_CHARS)} AUD 950`)).toBeNull();
-    expect(amountAtQuote('AUD 950', `${repeat('AUD 1, ', MAX_AMOUNT_TOKENS)}AUD 950`)).toBeNull();
-    expect(amountAtQuote('AUD 950', `${repeat('AUD 1, ', MAX_AMOUNT_TOKENS - 2)}AUD 950`)).toMatchObject({ value: 950 });
+    expect(amountAtQuote('AUD 950', `${repeat('AUD 1. ', MAX_AMOUNT_TOKENS)}AUD 950`)).toBeNull();
+    expect(amountAtQuote('AUD 950', `${repeat('AUD 1. ', MAX_AMOUNT_TOKENS - 2)}AUD 950`)).toMatchObject({ value: 950 });
   });
 });
 
@@ -60,5 +64,28 @@ describe('other parsers of email text', () => {
 
   it.each(cases)('finishes quickly: %s', (_label, work) => {
     expect(timed(work).ms).toBeLessThan(BUDGET_MS);
+  });
+});
+
+describe('other limits fail closed', () => {
+  it('drops a field longer than the cleaning limit instead of cutting it', () => {
+    expect(cleanField(`pay ${'a'.repeat(1_000)}`, 160)).toBeNull();
+    expect(cleanField('25 kg of the Lane House Blend', 160)).toBe('25 kg of the Lane House Blend');
+  });
+
+  it('marks an email cut when its HTML was longer than the HTML limit, so it gets no amount', () => {
+    const { raw, reading } = loadFixture('opening-order');
+    const html = `<p>${raw.email.text}</p>${' '.repeat(MAX_HTML_CHARS)}`;
+    const email = toInboundEmail({ ...raw.email, text: null, html });
+    expect(email.clipped).toBe(true);
+    const result = understand(email, reading, { maxAmount: 10_000 });
+    expect(result).toMatchObject({ kind: 'payment', amount: null, currency: null });
+    if (result.kind !== 'payment') throw new Error('expected a payment request');
+    expect(result.warnings).toContain(WARNINGS.emailClipped);
+  });
+
+  it('refuses a From header over the limit', () => {
+    expect(parseAddress(`"${'a'.repeat(400)}" <a@example.com>`)).toBeNull();
+    expect(parseAddress('"Mia Tran" <mia@example.com>')).toEqual({ address: 'mia@example.com', name: 'Mia Tran' });
   });
 });

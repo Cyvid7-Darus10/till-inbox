@@ -105,7 +105,9 @@ export function understand(email: InboundEmail, extraction: Extraction, settings
   const injected = extraction.containsInstructions || looksLikeInstructions(`${email.subject}\n${email.text}`);
   // An email that tries to instruct the assistant never gets a one-click Approve: the injected text
   // may itself contain a plausible amount, so an admin must type the amount in by hand.
-  const checked = injected ? { amount: null, currency: null, warnings: [] } : checkAmount(extraction, email.text, settings);
+  // A cut email may hold the real total in the part nobody read, so it gets no one-click Approve either.
+  const checked =
+    injected || email.clipped ? { amount: null, currency: null, warnings: [] } : checkAmount(extraction, email.text, settings);
   const flags: Warning[] = [
     ...(injected ? [WARNINGS.instructionsInEmail] : []),
     ...(senderVerified(email) ? [] : [WARNINGS.senderNotVerified]),

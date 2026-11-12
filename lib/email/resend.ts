@@ -7,6 +7,7 @@ import {
   htmlToText,
   type InboundEmail,
   inboundEmailSchema,
+  MAX_HTML_CHARS,
   type OutboundEmail,
   parseAddress,
   type WebhookDelivery,
@@ -61,8 +62,12 @@ export function toInboundEmail(json: unknown): InboundEmail {
   const email = receivedEmailSchema.parse(json);
   const from = parseAddress(email.from);
   if (!from) throw new Error('failed to read the received email: no valid From address');
-  const body = email.text?.trim() || htmlToText(email.html ?? '');
+  const textPart = email.text?.trim();
+  const html = email.html ?? '';
+  const body = textPart || htmlToText(html);
   const { text, clipped } = clipText(body);
+  // HTML beyond MAX_HTML_CHARS was never read, so the email counts as cut too.
+  const htmlCut = !textPart && html.length > MAX_HTML_CHARS;
   return inboundEmailSchema.parse({
     id: email.id,
     messageId: email.message_id ?? null,
@@ -70,7 +75,7 @@ export function toInboundEmail(json: unknown): InboundEmail {
     from,
     subject: (email.subject ?? '').slice(0, 300),
     text,
-    clipped,
+    clipped: clipped || htmlCut,
     auth: {
       spf: authResult(email.authentication?.spf),
       dkim: authResult(email.authentication?.dkim),

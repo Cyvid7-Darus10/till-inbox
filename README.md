@@ -136,7 +136,8 @@ doesn't email the customer either.
   symbol, a plain number with correct thousands commas and at most two decimals, standing apart
   from letters, other digits and joining marks. The quote must touch exactly one such amount, and
   its amount and currency must agree with the model's. Anything else gets no amount, never a best
-  guess: a total the model worked out (25 kg at AUD 38), a negative, a range or a choice of amounts,
+  guess: a total the model worked out (25 kg at AUD 38), a negative, a range or a choice of amounts
+  anywhere in the same sentence ("to", "or", "and", "until", a dash or a slash before another number),
   an invoice number, a date or a phone number, other ways of writing numbers (1.250,00, 12,50,
   1'250), digits from other scripts, a currency that is not written next to the amount, and a bare
   "$". Amounts above `TILL_MAX_AMOUNT` are dropped too. Without an amount, the card has no Approve
@@ -182,10 +183,11 @@ What the code protects against, in plain words:
   email by code with one strict grammar, as described above, and must agree with the model.
 - **Emails built to stall the parsers.** Every parser of email text has a hard cap and linear-time
   patterns: the webhook body is capped at 64 KB, HTML at 200,000 characters, the text the model
-  and the amount check read at 8,000, a From header at 400 and each cleaned field at 1,000. An
-  email with more than 200 numbers has no clear amount, and the range check looks only 40
-  characters either side of a number. `tests/pathological-input.test.ts` feeds each parser hostile
-  input and checks it finishes quickly.
+  and the amount check read at 8,000, a From header at 400 and each cleaned field at 1,000. Every
+  limit fails closed: a longer field is dropped rather than cut, a cut email gets no one-click
+  Approve, and an email with more than 200 numbers, a sentence that runs more than 300 characters
+  either side of the amount, or a word over 40 characters near it, has no clear amount.
+  `tests/pathological-input.test.ts` feeds each parser hostile input and checks it finishes quickly.
 - **Header injection.** The reply's subject is fixed text, the recipient is a validated address,
   and the original Message-ID is used for threading only if it is a single well-formed line.
 - **Personal data in logs.** Logs carry ids, counts and fixed codes. Fields whose names suggest
