@@ -35,6 +35,11 @@ exception: it needs an API key and a webhook secret. This is a sample app, not a
 >   same request returned the same link instead of a second one, and the status read back as unpaid
 >   (`npm run live-link`). The tool names and arguments were checked against the sandbox MCP server.
 >
+> - The inbound webhook on a Vercel preview deployment: an unsigned request and one with a bad
+>   signature got 401, a signed event of another type got 200 and was ignored, and a signed
+>   `email.received` got 200 and then tried to fetch the email from Resend (with a placeholder key,
+>   so Resend refused it and the app logged only the status).
+>
 > Run only against fakes:
 > - Receiving a real email from Resend, the Slack cards, buttons and amount form, and sending a
 >   reply. `npm run simulate` runs that whole flow with fakes, and the tests cover it, but it has
