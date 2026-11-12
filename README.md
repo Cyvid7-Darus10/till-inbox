@@ -169,6 +169,8 @@ in [docs/code-tour.md](docs/code-tour.md).
 - The replay cache, rate limits and click lock live in memory, per server instance. Two clicks on
   different instances in the same second could both reach Airwallex. Add a shared store such as
   Redis, and a Vercel Firewall rate limit rule on `/api/webhooks/email`, before heavy use.
+- The per-sender limit keys on the From address, which a sender can forge or change on every email.
+  Each email that gets through costs one model call, so set a spend limit in AI Gateway.
 - Most real emails with line items, unit prices or several figures will need a typed amount.
 - Only the first 8,000 characters of an email are read, and the card says when it was cut.
 - An email whose plain-text and formatted versions show different numbers needs a typed amount.

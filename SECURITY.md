@@ -49,6 +49,9 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 - An amount that is wrong but stated in the email. Read the email and the card before approving.
 - Replays, rate limits and the click lock across server instances: they live in memory, per
   instance. Two approvals on different instances in the same second could both create a link.
+- A flood of emails with forged or changing From addresses. The per-sender limit keys on the From
+  address, so it only slows down a sender who keeps the same one. The global per-minute limit still
+  applies per instance; set a spend limit in AI Gateway and a firewall rule for more.
 - Forged Slack clicks by someone who holds both a Vercel OIDC token for the project and
   `TILL_STATE_SECRET`. Vercel Connect forwards Slack's requests with the project's OIDC token, and
   the route accepts any such token for the project and environment. With the state secret as well,
